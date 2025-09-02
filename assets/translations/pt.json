@@ -1,0 +1,18 @@
+{
+  "loginScreenTitle": "NEXO",
+  "loginButtonGoogle": "Entrar com Google",
+  "decks_label": "Baralhos",
+  "hubs_label": "Hubs",
+  "nexopad_label": "Nexo Pad",
+  "social_label": "Social",
+  "feed_label": "Feed",
+  "editProfileTooltip": "Editar Perfil",
+  "logoutTooltip": "Sair",
+  "emptyDecksMessage": "Nenhum baralho ainda.\nClique em + para adicionar na nuvem.",
+  "addDeckTooltip": "Adicionar Baralho",
+  "newDeckDialogTitle": "Novo Baralho",
+  "newDeckDialogHint": "Nome do baralho",
+  "cancelButton": "Cancelar",
+  "addButton": "Adicionar",
+  "saveButton": "Salvar"
+}

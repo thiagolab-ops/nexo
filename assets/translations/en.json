@@ -1,0 +1,18 @@
+{
+  "loginScreenTitle": "NEXO",
+  "loginButtonGoogle": "Sign in with Google",
+  "decks_label": "Decks",
+  "hubs_label": "Hubs",
+  "nexopad_label": "Nexo Pad",
+  "social_label": "Social",
+  "feed_label": "Feed",
+  "editProfileTooltip": "Edit Profile",
+  "logoutTooltip": "Log out",
+  "emptyDecksMessage": "No decks yet.\nClick + to add one to the cloud.",
+  "addDeckTooltip": "Add Deck",
+  "newDeckDialogTitle": "New Deck",
+  "newDeckDialogHint": "Deck name",
+  "cancelButton": "Cancel",
+  "addButton": "Add",
+  "saveButton": "Save"
+}

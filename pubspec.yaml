@@ -1,0 +1,54 @@
+name: nexo
+description: Um aplicativo de flashcards para estudo e memorização.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.3 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  
+  easy_localization: ^3.0.7
+  firebase_core: ^2.32.0
+  firebase_auth: ^4.20.0
+  cloud_firestore: ^4.17.5
+  firebase_storage: ^11.7.7
+  google_sign_in: ^6.2.1
+  google_fonts: ^6.2.1
+  table_calendar: ^3.1.2
+  share_plus: ^9.0.0
+  math_expressions: ^2.4.0
+  flutter_quill: 9.6.0 # VERSÃO TRAVADA E ESTÁVEL
+  image_picker: ^1.1.2
+  image: ^4.1.7
+  cupertino_icons: ^1.0.2
+  uuid: ^4.3.3
+  file_picker: ^6.2.1
+  csv: ^5.1.1
+  intl: ^0.18.1 # MANTIDO PARA COMPATIBILIDADE COM EASY_LOCALIZATION
+  provider: ^6.1.2
+  cloud_functions: ^4.7.0
+  timeago: ^3.6.1
+  url_launcher: ^6.3.0
+
+dependency_overrides:
+  intl: '0.18.1' # FORÇANDO A VERSÃO PARA RESOLVER CONFLITOS
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/translations/
+  fonts:
+    - family: PressStart2P
+      fonts:
+        - asset: assets/fonts/PressStart2P-Regular.ttf
