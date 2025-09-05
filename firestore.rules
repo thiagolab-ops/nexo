@@ -21,7 +21,6 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      // REGRA ALTERADA TEMPORARIAMENTE PARA DIAGNÓSTICO
       allow read: if request.auth != null; 
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
@@ -46,7 +45,8 @@ service cloud.firestore {
 
       match /comments/{commentId} {
         allow read: if request.auth != null;
-        allow create: if request.auth.uid == request.resource.data.authorId;
+        // REGRA FINALMENTE CORRIGIDA:
+        allow create: if request.auth != null;
         allow delete: if request.auth.uid == resource.data.authorId;
         allow update: if false;
       }

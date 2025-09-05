@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:nexo/screens/tela_baralhos_lista.dart'; 
 import 'package:nexo/screens/tela_notificacoes.dart';
 import 'package:nexo/screens/tela_perfil.dart';
+import 'package:nexo/services/notification_service.dart';
 import 'package:provider/provider.dart';
 import 'package:nexo/screens/tela_feed.dart';
 
@@ -43,10 +44,11 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // CORREÇÃO: Usando MultiProvider para injetar todos os serviços necessários
+    // e o perfil do usuário na árvore de widgets.
     return MultiProvider(
       providers: [
-        // Disponibiliza o ProfileService para toda a app
         Provider<ProfileService>(create: (_) => ProfileService()),
+        Provider<NotificationService>(create: (_) => NotificationService()),
         // Disponibiliza o estado de autenticação do usuário
         StreamProvider<User?>.value(
           value: FirebaseAuth.instance.authStateChanges(),
@@ -99,26 +101,54 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
 
   @override
   Widget build(BuildContext context) {
-    // Usando o StreamProvider que criamos no MyApp para obter o perfil
     return StreamBuilder<UserModel?>(
       stream: context.read<ProfileService>().getUserProfileStream(_userId),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+      builder: (context, userSnapshot) {
+        if (!userSnapshot.hasData) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
-        final userProfile = snapshot.data!;
+        final userProfile = userSnapshot.data!;
 
         return Scaffold(
           appBar: AppBar(
             title: Text('NEXO', style: GoogleFonts.pressStart2p(fontSize: 20)),
             actions: [
-              IconButton(
-                icon: const Icon(Icons.notifications_none),
-                tooltip: 'Notificações',
-                onPressed: () {
-                   Navigator.of(context).push(MaterialPageRoute(
-                     builder: (context) => const TelaNotificacoes(),
-                   ));
+              // O novo widget do sino de notificações
+              StreamBuilder<int>(
+                stream: context.read<NotificationService>().getUnreadNotificationCountStream(_userId),
+                builder: (context, notificationSnapshot) {
+                  final unreadCount = notificationSnapshot.data ?? 0;
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.notifications_none),
+                        tooltip: 'Notificações',
+                        onPressed: () {
+                          Navigator.of(context).push(MaterialPageRoute(
+                            // Passando o perfil do usuário para a tela de notificações
+                            builder: (context) => Provider.value(
+                              value: userProfile,
+                              child: const TelaNotificacoes(),
+                            ),
+                          ));
+                        },
+                      ),
+                      if (unreadCount > 0)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                            height: 10,
+                            width: 10,
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
                 },
               ),
               IconButton(

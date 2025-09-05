@@ -20,6 +20,17 @@ class NotificationService {
     });
   }
 
+  /// Retorna um Stream com a contagem de notificações não lidas para um usuário.
+  Stream<int> getUnreadNotificationCountStream(String userId) {
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('notifications')
+        .where('isRead', isEqualTo: false)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.length);
+  }
+
   // Método FALTANTE que agora está sendo adicionado
   Future<void> markNotificationAsRead(String userId, String notificationId) async {
     await _firestore

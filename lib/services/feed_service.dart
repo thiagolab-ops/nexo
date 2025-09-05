@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:nexo/services/profile_service.dart';
+import 'package:rxdart/rxdart.dart';
 import '../models/models.dart';
 
 class FeedService {
@@ -34,32 +35,45 @@ class FeedService {
     await newPostRef.set(newPost);
   }
 
+  // MÉTODO CORRIGIDO PARA USAR SNAPSHOTS (TEMPO REAL)
   Stream<List<Post>> getFeedStream() {
     final currentUser = _auth.currentUser;
     if (currentUser == null) {
       return Stream.value([]);
     }
-    return _profileService.getUserProfileStream(currentUser.uid).asyncMap((userProfile) async {
-      List<String> authorsToShow = [currentUser.uid];
-      if (userProfile != null && userProfile.followingIds.isNotEmpty) {
-        authorsToShow.addAll(userProfile.followingIds);
+
+    // Usamos o Stream do perfil para obter a lista de 'followingIds'
+    return _profileService.getUserProfileStream(currentUser.uid).switchMap((userProfile) {
+      if (userProfile == null) {
+        return Stream.value([]);
       }
+
+      List<String> authorsToShow = [currentUser.uid, ...userProfile.followingIds];
+      if (authorsToShow.isEmpty) {
+        return Stream.value([]);
+      }
+      
+      // Firestore limita 'whereIn' a 30 itens, então quebramos em múltiplos streams
       final chunks = <List<String>>[];
-      for (var i = 0; i < authorsToShow.length; i += 30) {
+       for (var i = 0; i < authorsToShow.length; i += 30) {
         chunks.add(authorsToShow.sublist(i, i + 30 > authorsToShow.length ? authorsToShow.length : i + 30));
       }
-      List<Post> allPosts = [];
-      for (final chunk in chunks) {
-        if (chunk.isEmpty) continue;
-        final snapshot = await _postsCollection
+      
+      // Combinamos os resultados de todos os streams
+      final streams = chunks.map((chunk) {
+        return _postsCollection
             .where('authorId', whereIn: chunk)
             .orderBy('createdAt', descending: true)
             .limit(50)
-            .get();
-        allPosts.addAll(snapshot.docs.map((doc) => doc.data()).toList());
-      }
-      allPosts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return allPosts;
+            .snapshots()
+            .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
+      }).toList();
+
+      return CombineLatestStream.list(streams).map((listOfLists) {
+          final allPosts = listOfLists.expand((postList) => postList).toList();
+          allPosts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return allPosts;
+      });
     });
   }
 
