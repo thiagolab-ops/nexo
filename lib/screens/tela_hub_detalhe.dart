@@ -25,8 +25,21 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> {
   }
 
   void _openChat() async {
+    // Busca por uma sala de chat existente para este Hub
+    final existingRoom = await _chatService.getChatRoomById(widget.hub.id);
+
+    if (existingRoom != null) {
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (context) => TelaChatMensagens(chatRoom: existingRoom)),
+        );
+      }
+      return;
+    }
+    
+    // Se não existir, cria uma nova
     final newChatRoom = ChatRoom(
-      id: '', // será gerado pelo serviço
+      id: widget.hub.id, // Usa o ID do Hub como ID da sala de chat
       type: ChatRoomType.group,
       memberIds: widget.hub.memberIds,
       hubId: widget.hub.id,
@@ -43,15 +56,15 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.hub.name),
         actions: [
+          // BOTÃO DE CHAT DO HUB ADICIONADO
           IconButton(
-            icon: const Icon(Icons.chat),
+            icon: const Icon(Icons.chat_bubble),
             onPressed: _openChat,
             tooltip: 'Chat do Hub',
           )
@@ -84,7 +97,6 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> {
                     final member = members[index];
                     return ListTile(
                       title: Text(member.username),
-                      // Adicione mais detalhes se quiser
                     );
                   },
                 );

@@ -1,36 +1,36 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:nexo/models/models.dart';
-import 'package:nexo/services/nexo_hub_service.dart';
-import 'package:nexo/services/profile_service.dart';
-import 'package:nexo/widgets/user_list_view.dart';
+import 'package:nexo/screens/tela_chats_lista.dart'; 
+import '../models/models.dart';
+import '../services/nexo_hub_service.dart';
+import '../services/profile_service.dart';
+import '../widgets/search_result_tile.dart';
+import '../widgets/user_list_view.dart';
+import 'package:provider/provider.dart';
 
 class TelaSocial extends StatefulWidget {
   const TelaSocial({super.key});
 
   @override
-  _TelaSocialState createState() => _TelaSocialState();
+  State<TelaSocial> createState() => _TelaSocialState();
 }
 
-class _TelaSocialState extends State<TelaSocial> {
+class _TelaSocialState extends State<TelaSocial> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   final ProfileService _profileService = ProfileService();
   final NexoHubService _hubService = NexoHubService();
-  final TextEditingController _searchController = TextEditingController();
+  final _searchController = TextEditingController();
   Future<List<UserModel>>? _searchResultsFuture;
-  UserModel? _currentUserProfile;
-  String _currentUserId = 'current_user_id'; // Substitua pelo ID do usuário atual
+  final String _currentUserId = FirebaseAuth.instance.currentUser!.uid;
 
   @override
   void initState() {
     super.initState();
-    _fetchCurrentUserProfile();
+    _tabController = TabController(length: 5, vsync: this);
   }
 
-  Future<void> _fetchCurrentUserProfile() async {
-    final profile = await _profileService.getUserProfile(_currentUserId);
-    if (mounted) setState(() => _currentUserProfile = profile);
-  }
-
-  void _searchUsers(String query) {
+  void _searchUsers() {
+    final query = _searchController.text.trim();
     if (query.isNotEmpty) {
       setState(() {
         _searchResultsFuture = _profileService.searchUsersByUsername(
@@ -38,89 +38,130 @@ class _TelaSocialState extends State<TelaSocial> {
           currentUserId: _currentUserId,
         );
       });
-    } else {
-      setState(() {
-        _searchResultsFuture = null;
-      });
     }
   }
 
   @override
+  void dispose() {
+    _tabController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final currentUserProfile = Provider.of<UserModel?>(context);
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Social'),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Buscar usuários...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onChanged: _searchUsers,
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (_currentUserProfile != null) ...[
-            // Seguidores
-            if (_currentUserProfile!.followerIds != null && _currentUserProfile!.followerIds!.isNotEmpty)
-              UserListView(
-                userIds: _currentUserProfile!.followerIds!,
-                currentUserProfile: _currentUserProfile!,
-              ),
-            
-            // Seguindo
-            if (_currentUserProfile!.followingIds != null && _currentUserProfile!.followingIds!.isNotEmpty)
-              UserListView(
-                userIds: _currentUserProfile!.followingIds!,
-                currentUserProfile: _currentUserProfile!,
-              ),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          tabs: const [
+            Tab(text: 'Conversas'),
+            Tab(text: 'Procurar'),
+            Tab(text: 'Seguidores'),
+            Tab(text: 'Seguindo'),
+            Tab(text: 'Convites de Hub'),
           ],
-          
-          // Resultados da busca
-          if (_searchResultsFuture != null)
-            Expanded(
-              child: FutureBuilder<List<UserModel>>(
-                future: _searchResultsFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return const Center(child: Text('Nenhum usuário encontrado'));
-                  }
-                  
-                  final users = snapshot.data!;
-                  
-                  return ListView.builder(
-                    itemCount: users.length,
-                    itemBuilder: (context, index) {
-                      final user = users[index];
-                      return ListTile(
-                        leading: CircleAvatar(
-                          child: Text(user.username[0].toUpperCase()),
-                        ),
-                        title: Text(user.username),
-                        subtitle: Text(user.bio ?? ''),
-                        onTap: () {
-                          // Navegar para o perfil do usuário
-                        },
-                      );
-                    },
+        ),
+      ),
+      body: currentUserProfile == null
+          ? const Center(child: CircularProgressIndicator())
+          : TabBarView(
+              controller: _tabController,
+              children: [
+                const TelaChatsLista(),
+                _buildSearchTab(currentUserProfile),
+                UserListView(userIds: currentUserProfile.followerIds, currentUserProfile: currentUserProfile),
+                UserListView(userIds: currentUserProfile.followingIds, currentUserProfile: currentUserProfile),
+                _buildHubInvitesTab(),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildSearchTab(UserModel currentUserProfile) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              labelText: 'Procurar por @username',
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.search),
+                tooltip: 'Procurar',
+                onPressed: _searchUsers,
+              ),
+            ),
+            onSubmitted: (_) => _searchUsers(),
+          ),
+        ),
+        Expanded(
+          child: FutureBuilder<List<UserModel>>(
+            future: _searchResultsFuture,
+            builder: (context, snapshot) {
+              if (_searchResultsFuture == null) return const Center(child: Text('Procure para encontrar outros campeões!'));
+              if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+              if (snapshot.hasError) return Center(child: Text('Erro ao buscar: ${snapshot.error}'));
+              if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('Nenhum usuário encontrado.'));
+              
+              final results = snapshot.data!;
+              return ListView.builder(
+                itemCount: results.length,
+                itemBuilder: (context, index) {
+                  final user = results[index];
+                  return SearchResultTile(
+                    user: user,
+                    currentUserProfile: currentUserProfile,
+                    profileService: _profileService,
                   );
                 },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ABA DE CONVITES CORRIGIDA
+  Widget _buildHubInvitesTab() {
+    return StreamBuilder<List<Map<String, dynamic>>>( // TIPO CORRIGIDO AQUI
+      stream: _hubService.getReceivedHubInvitesStream(_currentUserId),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (snapshot.data!.isEmpty) return const Center(child: Text("Nenhum convite de Hub."));
+        
+        final invites = snapshot.data!; // 'invites' agora é uma List<Map>
+        return ListView.builder(
+          itemCount: invites.length,
+          itemBuilder: (context, index) {
+            final inviteData = invites[index]; // cada item é um Map
+            return ListTile(
+              leading: const Icon(Icons.group_add),
+              title: Text('Convite para o Hub "${inviteData['hubName']}"'),
+              subtitle: Text('Enviado por ${inviteData['fromUsername']}'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(
+                    child: const Text("Aceitar", style: TextStyle(color: Colors.green)),
+                    onPressed: () => _hubService.acceptHubInvite(inviteData['id']), // Acessando o ID do mapa
+                  ),
+                  TextButton(
+                    child: const Text("Recusar", style: TextStyle(color: Colors.red)),
+                    onPressed: () => _hubService.declineHubInvite(inviteData['id']), // Acessando o ID do mapa
+                  ),
+                ],
               ),
-            ),
-        ],
-      ),
+            );
+          },
+        );
+      },
     );
   }
 }

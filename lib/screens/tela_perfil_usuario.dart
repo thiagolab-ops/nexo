@@ -1,153 +1,100 @@
 import 'package:flutter/material.dart';
-import 'package:nexo/models/models.dart';
-import 'package:nexo/services/profile_service.dart';
+import 'package:nexo/screens/tela_chat_mensagens.dart';
 import 'package:nexo/services/chat_service.dart';
+import 'package:provider/provider.dart';
+import '../models/models.dart';
+import '../services/profile_service.dart';
+import '../widgets/user_avatar.dart';
 
 class TelaPerfilUsuario extends StatefulWidget {
   final String userId;
-  
   const TelaPerfilUsuario({super.key, required this.userId});
 
   @override
-  _TelaPerfilUsuarioState createState() => _TelaPerfilUsuarioState();
+  State<TelaPerfilUsuario> createState() => _TelaPerfilUsuarioState();
 }
 
 class _TelaPerfilUsuarioState extends State<TelaPerfilUsuario> {
   final ProfileService _profileService = ProfileService();
   final ChatService _chatService = ChatService();
-  UserModel? _userProfile;
-  UserModel? _currentUserProfile;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchUserProfile();
-    _fetchCurrentUserProfile();
-  }
-
-  Future<void> _fetchUserProfile() async {
-    final profile = await _profileService.getUserProfile(widget.userId);
-    if (mounted) setState(() => _userProfile = profile);
-  }
-
-  Future<void> _fetchCurrentUserProfile() async {
-    final profile = await _profileService.getUserProfile('current_user_id'); // Substitua pelo ID do usuário atual
-    if (mounted) setState(() => _currentUserProfile = profile);
-  }
-
-  void _showBlockDialog(UserModel profileUser) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Bloquear usuário'),
-        content: Text('Tem certeza que deseja bloquear ${profileUser.username}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () {
-              // Implementar lógica de bloqueio
-              Navigator.of(context).pop();
-            },
-            child: const Text('Bloquear', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _startChatWith(UserModel currentUser, UserModel otherUser) async {
-    final chatRoom = await _chatService.getOrCreateDmRoom(currentUser, otherUser);
-    // Navegar para a tela de chat
+    try {
+      final chatRoom = await _chatService.getOrCreateDmRoom(currentUser, otherUser);
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (context) => TelaChatMensagens(chatRoom: chatRoom)),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Não foi possível iniciar o chat: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_userProfile == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
+    final currentUserProfile = Provider.of<UserModel?>(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_userProfile!.username),
+        title: const Text('Perfil de Usuário'),
       ),
-      body: _buildProfileView(_userProfile),
-    );
-  }
+      body: StreamBuilder<UserModel?>(
+        stream: _profileService.getUserProfileStream(widget.userId),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final userProfile = snapshot.data!;
 
-  Widget _buildProfileView(UserModel? userProfile) {
-    if (userProfile == null) {
-      return const Center(child: Text('Perfil não encontrado'));
-    }
+          if (currentUserProfile == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-    final bool isFollowing = _currentUserProfile?.followingIds?.contains(userProfile.id) ?? false;
-    final bool isFollower = _currentUserProfile?.followerIds?.contains(userProfile.id) ?? false;
+          final bool isFollowing = currentUserProfile.followingIds.contains(userProfile.id);
+          final bool isFollower = userProfile.followingIds.contains(currentUserProfile.id);
+          final bool isCoNexo = isFollowing && isFollower;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            userProfile.username,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          if (userProfile.bio != null)
-            Text(
-              userProfile.bio!,
-              style: const TextStyle(fontSize: 16),
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                UserAvatar(username: userProfile.username, photoUrl: userProfile.photoUrl, radius: 60),
+                const SizedBox(height: 16),
+                Text(userProfile.username, style: Theme.of(context).textTheme.headlineSmall),
+                Text(userProfile.email),
+                const SizedBox(height: 16),
+                Text(userProfile.bio, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
+                const SizedBox(height: 32),
+                
+                // BOTÃO DE CHAT PRIVADO (APENAS PARA CO-NEXOS)
+                if (isCoNexo) ...[
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.chat_bubble),
+                    label: const Text('Iniciar Conversa'),
+                    onPressed: () => _startChatWith(currentUserProfile, userProfile),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                isFollowing
+                    ? ElevatedButton(
+                        onPressed: () => _profileService.unfollowUser(currentUserProfile.id, userProfile.id),
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
+                        child: const Text('Deixar de Seguir'),
+                      )
+                    : ElevatedButton(
+                        onPressed: () => _profileService.followUser(currentUserProfile.id, userProfile.id),
+                        child: const Text('Seguir'),
+                      ),
+              ],
             ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              _buildStatColumn('Seguidores', userProfile.followerIds?.length ?? 0),
-              _buildStatColumn('Seguindo', userProfile.followingIds?.length ?? 0),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              ElevatedButton(
-                onPressed: () {
-                  if (isFollowing) {
-                    // Deixar de seguir
-                  } else {
-                    // Seguir
-                  }
-                },
-                child: Text(isFollowing ? 'Deixar de seguir' : 'Seguir'),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () => _startChatWith(_currentUserProfile!, userProfile),
-                child: const Text('Mensagem'),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () => _showBlockDialog(userProfile),
-                child: const Text('Bloquear'),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatColumn(String label, int count) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(
-            count.toString(),
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          Text(label),
-        ],
+          );
+        },
       ),
     );
   }

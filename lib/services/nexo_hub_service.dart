@@ -97,18 +97,22 @@ class NexoHubService {
     await batch.commit();
   }
     
-  // MÉTODO ADICIONADO AQUI
   Future<void> shareQuizWithHub({required String hubId, required Quiz quiz}) async {
     await _hubsRef.doc(hubId).collection('quizzes').add(quiz.toMap());
   }
 
+  // MÉTODO CORRIGIDO para incluir o ID do documento no mapa
   Stream<List<Map<String, dynamic>>> getReceivedHubInvitesStream(String userId) {
     return _firestore
         .collection('hub_invites')
         .where('toUserId', isEqualTo: userId)
         .where('status', isEqualTo: 'pending')
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
+        .map((snapshot) => snapshot.docs.map((doc) {
+              final data = doc.data();
+              data['id'] = doc.id; // Adicionando o ID ao mapa
+              return data;
+            }).toList());
   }
 
   Future<void> acceptHubInvite(String inviteId) async {
