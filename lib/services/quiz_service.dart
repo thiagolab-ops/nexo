@@ -7,6 +7,17 @@ class QuizService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String _userId = FirebaseAuth.instance.currentUser!.uid;
 
+  CollectionReference<Quiz> _getQuizzesRef() {
+    return _firestore
+        .collection('users')
+        .doc(_userId)
+        .collection('quizzes')
+        .withConverter<Quiz>(
+          fromFirestore: (snapshot, _) => Quiz.fromFirestore(snapshot),
+          toFirestore: (quiz, _) => quiz.toMap(),
+        );
+  }
+
   Future<void> generateAndSaveQuiz({
     required String deckId,
     required String deckName,
@@ -34,8 +45,9 @@ class QuizService {
       ));
     }
 
+    final newQuizRef = _getQuizzesRef().doc();
     final newQuiz = Quiz(
-      id: '', // Firestore irá gerar
+      id: newQuizRef.id,
       title: 'Prova de "$deckName"',
       ownerId: _userId,
       sourceDeckId: deckId,
@@ -43,25 +55,21 @@ class QuizService {
       createdAt: Timestamp.now(),
     );
     
-    await _firestore
-        .collection('users')
-        .doc(_userId)
-        .collection('quizzes')
-        .add(newQuiz.toMap());
+    await newQuizRef.set(newQuiz);
   }
 
-  // MÉTODO ADICIONADO AQUI
   Stream<List<Quiz>> getQuizzesForDeckStream(String deckId) {
-    return _firestore
-        .collection('users')
-        .doc(_userId)
-        .collection('quizzes')
+    return _getQuizzesRef()
         .where('sourceDeckId', isEqualTo: deckId)
         .orderBy('createdAt', descending: true)
-        .withConverter<Quiz>(
-          fromFirestore: (snapshot, _) => Quiz.fromFirestore(snapshot),
-          toFirestore: (quiz, _) => quiz.toMap(),
-        )
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
+  }
+
+  // MÉTODO FALTANTE ADICIONADO
+  Stream<List<Quiz>> getAllQuizzesForUserStream() {
+    return _getQuizzesRef()
+        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
   }

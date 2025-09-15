@@ -6,7 +6,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:nexo/screens/tela_baralhos_lista.dart'; 
 import 'package:nexo/screens/tela_notificacoes.dart';
 import 'package:nexo/screens/tela_perfil.dart';
+import 'package:nexo/services/chat_service.dart';
+import 'package:nexo/services/feed_service.dart';
+import 'package:nexo/services/firestore_service.dart';
+import 'package:nexo/services/nexo_hub_service.dart';
 import 'package:nexo/services/notification_service.dart';
+import 'package:nexo/services/quiz_service.dart';
+import 'package:nexo/services/report_service.dart';
 import 'package:provider/provider.dart';
 import 'package:nexo/screens/tela_feed.dart';
 
@@ -24,6 +30,7 @@ import 'widgets/user_avatar.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
   await EasyLocalization.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
@@ -55,6 +62,13 @@ class MyApp extends StatelessWidget {
               Provider<ProfileService>(create: (_) => ProfileService()),
               Provider<NotificationService>(create: (_) => NotificationService()),
               Provider<NexoPadService>(create: (_) => NexoPadService()),
+              Provider<FirestoreService>(create: (_) => FirestoreService()),
+              Provider<NexoHubService>(create: (_) => NexoHubService()),
+              Provider<ChatService>(create: (_) => ChatService()),
+              Provider<FeedService>(create: (_) => FeedService()),
+              Provider<QuizService>(create: (_) => QuizService()),
+              Provider<ReportService>(create: (_) => ReportService()),
+              
               if (user != null)
                 StreamProvider<UserModel?>.value(
                   value: ProfileService().getUserProfileStream(user.uid),
@@ -106,42 +120,89 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
     const TelaSocial(),
     const TelaFeed(),
   ];
-  
-  // LÓGICA PARA O BOTÃO FLUTUANTE CORRETO
+
+  void _mostrarDialogoNovoBaralho({Baralho? baralhoExistente}) {
+    final nomeController = TextEditingController(text: baralhoExistente?.nome);
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(baralhoExistente == null ? 'newDeckDialogTitle'.tr() : 'Editar Nome'),
+          content: TextField(
+            controller: nomeController,
+            autofocus: true,
+            decoration: InputDecoration(hintText: 'newDeckDialogHint'.tr()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text('cancelButton'.tr()),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final nome = nomeController.text.trim();
+                if (nome.isNotEmpty) {
+                  final firestoreService = context.read<FirestoreService>();
+                  final userId = FirebaseAuth.instance.currentUser!.uid;
+                  if (baralhoExistente != null) {
+                    await firestoreService.updateBaralho(userId, baralhoExistente.id!, nome);
+                  } else {
+                    final novoBaralho = Baralho(nome: nome, ownerId: userId);
+                    await firestoreService.addBaralho(novoBaralho, userId);
+                  }
+                  if (mounted) Navigator.of(dialogContext).pop();
+                }
+              },
+              child: Text(baralhoExistente == null ? 'addButton'.tr() : 'saveButton'.tr()),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget? _buildFloatingActionButton(BuildContext context, UserModel userProfile) {
-    // Aba Feed (índice 4): Botão para criar post (só para professores)
-    if (_indiceAtual == 4 && userProfile.role == 'professor') {
-      return FloatingActionButton(
-        heroTag: 'add_post',
-        onPressed: () {
-          Navigator.of(context).push(MaterialPageRoute(
-            builder: (context) => const TelaCriarPost(),
-            fullscreenDialog: true,
-          ));
-        },
-        tooltip: 'Criar Post',
-        child: const Icon(Icons.add),
-      );
+    switch (_indiceAtual) {
+      case 0: // Aba Baralhos
+        return FloatingActionButton(
+          heroTag: 'add_deck',
+          onPressed: () => _mostrarDialogoNovoBaralho(),
+          tooltip: 'addDeckTooltip'.tr(),
+          child: const Icon(Icons.add),
+        );
+      case 2: // Aba Nexo Pad
+        return FloatingActionButton(
+          heroTag: 'add_document',
+          onPressed: () async {
+            final nexoPadService = context.read<NexoPadService>();
+            final newDocument = await nexoPadService.createNewDocument();
+            if (mounted) {
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (context) => TelaNexoPad(document: newDocument),
+              ));
+            }
+          },
+          tooltip: 'Novo Documento',
+          child: const Icon(Icons.add),
+        );
+      case 4: // Aba Feed
+        if (userProfile.role == 'professor') {
+          return FloatingActionButton(
+            heroTag: 'add_post',
+            onPressed: () {
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (context) => const TelaCriarPost(),
+                fullscreenDialog: true,
+              ));
+            },
+            tooltip: 'Criar Post',
+            child: const Icon(Icons.add),
+          );
+        }
+        return null; 
+      default:
+        return null;
     }
-    // Aba Nexo Pad (índice 2): Botão para criar documento
-    if (_indiceAtual == 2) {
-      return FloatingActionButton(
-        heroTag: 'add_document',
-        onPressed: () async {
-          final nexoPadService = context.read<NexoPadService>();
-          final newDocument = await nexoPadService.createNewDocument();
-          if (mounted) {
-            Navigator.of(context).push(MaterialPageRoute(
-              builder: (context) => TelaNexoPad(document: newDocument),
-            ));
-          }
-        },
-        tooltip: 'Novo Documento',
-        child: const Icon(Icons.add),
-      );
-    }
-    // Para as outras abas, não mostra nenhum botão (null)
-    return null;
   }
 
   @override
@@ -175,15 +236,10 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                   ),
                   if (unreadCount > 0)
                     Positioned(
-                      top: 8,
-                      right: 8,
+                      top: 8, right: 8,
                       child: Container(
-                        height: 10,
-                        width: 10,
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
+                        height: 10, width: 10,
+                        decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                       ),
                     ),
                 ],

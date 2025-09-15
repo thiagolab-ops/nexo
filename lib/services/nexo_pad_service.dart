@@ -17,18 +17,17 @@ class NexoPadService {
       .map((snapshot) => snapshot.docs.map((doc) => NexoPadDocument.fromFirestore(doc as DocumentSnapshot<Map<String, dynamic>>)).toList());
   }
 
-  // NOVO MÉTODO PARA CRIAR UM DOCUMENTO
   Future<NexoPadDocument> createNewDocument() async {
-    final newDocRef = _getDocsRef().doc();
+    final newDocRef = _getDocsRef().doc(); // Gera um ID
     final newDoc = NexoPadDocument(
-      id: newDocRef.id,
+      id: newDocRef.id, // Passa o ID no construtor
       title: 'Novo Documento',
       ownerId: _userId!,
-      contentJson: '[{"insert":"\\n"}]', // Documento em branco
+      contentJson: '[{"insert":"\\n"}]',
       createdAt: Timestamp.now(),
       lastEdited: Timestamp.now(),
     );
-    await newDocRef.set(newDoc.toMap());
+    await newDocRef.set(newDoc.toMap()); // Salva o documento com o ID correto
     return newDoc;
   }
 

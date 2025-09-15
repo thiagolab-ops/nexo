@@ -143,8 +143,8 @@ class _TelaSocialState extends State<TelaSocial> with SingleTickerProviderStateM
             final inviteData = invites[index]; // cada item é um Map
             return ListTile(
               leading: const Icon(Icons.group_add),
-              title: Text('Convite para o Hub "${inviteData['hubName']}"'),
-              subtitle: Text('Enviado por ${inviteData['fromUsername']}'),
+              title: Text('Convite para o Hub "${inviteData['hubName'] ?? 'Nome Indisponível'}"'),
+              subtitle: Text('Enviado por ${inviteData['fromUsername'] ?? 'Usuário Desconhecido'}'),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

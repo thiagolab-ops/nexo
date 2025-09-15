@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_quill/flutter_quill.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:nexo/models/models.dart';
 import 'package:nexo/services/nexo_pad_service.dart';
 import 'package:nexo/services/profile_service.dart';
@@ -17,12 +17,13 @@ class TelaNexoPad extends StatefulWidget {
 }
 
 class _TelaNexoPadState extends State<TelaNexoPad> {
-  late final QuillController _controller;
+  late quill.QuillController _controller;
   final NexoPadService _nexoPadService = NexoPadService();
   final ProfileService _profileService = ProfileService();
   UserModel? _currentUserProfile;
   bool _showCalculator = false;
   final FocusNode _editorFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -35,6 +36,7 @@ class _TelaNexoPadState extends State<TelaNexoPad> {
   void dispose() {
     _controller.dispose();
     _editorFocusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -50,15 +52,15 @@ class _TelaNexoPadState extends State<TelaNexoPad> {
     try {
       if (widget.document.contentJson.isNotEmpty) {
         final json = jsonDecode(widget.document.contentJson);
-        _controller = QuillController(
-          document: Document.fromJson(json),
+        _controller = quill.QuillController(
+          document: quill.Document.fromJson(json),
           selection: const TextSelection.collapsed(offset: 0),
         );
       } else {
-        _controller = QuillController.basic();
+        _controller = quill.QuillController.basic();
       }
     } catch (e) {
-      _controller = QuillController.basic();
+      _controller = quill.QuillController.basic();
     }
   }
 
@@ -74,9 +76,11 @@ class _TelaNexoPadState extends State<TelaNexoPad> {
       lastEdited: Timestamp.now(),
     );
     
-    if (mounted) {
+    await _nexoPadService.updateDocument(updatedDocument);
+    
+    if(mounted){
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Documento salvo! (simulação)'), backgroundColor: Colors.green),
+        const SnackBar(content: Text('Documento salvo!'), backgroundColor: Colors.green),
       );
     }
   }
@@ -103,11 +107,10 @@ class _TelaNexoPadState extends State<TelaNexoPad> {
         children: [
           Column(
             children: [
-              // CONSTRUÇÃO CORRETA PARA v9.6.0
-              QuillToolbar.simple(
-                configurations: QuillSimpleToolbarConfigurations(
+              quill.QuillToolbar.simple(
+                configurations: quill.QuillSimpleToolbarConfigurations(
                   controller: _controller,
-                  sharedConfigurations: const QuillSharedConfigurations(
+                  sharedConfigurations: const quill.QuillSharedConfigurations(
                     locale: Locale('pt', 'BR'),
                   ),
                 ),
@@ -116,16 +119,15 @@ class _TelaNexoPadState extends State<TelaNexoPad> {
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.all(16.0),
-                  child: QuillEditor.basic(
-                    // CONSTRUÇÃO CORRETA PARA v9.6.0
-                    configurations: QuillEditorConfigurations(
+                  child: quill.QuillEditor( 
+                    focusNode: _editorFocusNode,
+                    scrollController: _scrollController,
+                    configurations: quill.QuillEditorConfigurations(
                       controller: _controller,
-                      sharedConfigurations: const QuillSharedConfigurations(
+                      sharedConfigurations: const quill.QuillSharedConfigurations(
                         locale: Locale('pt', 'BR'),
                       ),
                     ),
-                    focusNode: _editorFocusNode,
-                    scrollController: ScrollController(),
                   ),
                 ),
               )
@@ -134,10 +136,10 @@ class _TelaNexoPadState extends State<TelaNexoPad> {
           if (_showCalculator)
             CalculadoraFlutuante(
               onClose: () => setState(() => _showCalculator = false),
-              onInsert: (textToInsert) {
-                final index = _controller.selection.baseOffset;
-                _controller.replaceText(index, 0, '\$textToInsert ', TextSelection.collapsed(offset: index + textToInsert.length + 1));
-                _editorFocusNode.requestFocus();
+              onInsert: (String textToInsert) {
+                  final index = _controller.selection.baseOffset;
+                  _controller.replaceText(index, 0, '$textToInsert ', TextSelection.collapsed(offset: index + textToInsert.length + 1));
+                  _editorFocusNode.requestFocus();
               },
             ),
         ],
