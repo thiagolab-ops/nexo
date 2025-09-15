@@ -119,6 +119,7 @@ class _TelaNexoPadState extends State<TelaNexoPad> {
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.all(16.0),
+                  // CONSTRUTOR LIMPO, APENAS COM OS PARÂMETROS REQUERIDOS
                   child: quill.QuillEditor( 
                     focusNode: _editorFocusNode,
                     scrollController: _scrollController,

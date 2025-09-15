@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:nexo/models/models.dart';
+import 'package:nexo/screens/tela_agenda_hub.dart';
 import 'package:nexo/screens/tela_mapa_mental.dart';
 import 'package:nexo/services/chat_service.dart';
 import 'package:nexo/services/nexo_hub_service.dart';
 import 'package:nexo/screens/tela_chat_mensagens.dart';
+import 'package:nexo/services/profile_service.dart';
+import 'package:nexo/widgets/user_avatar.dart';
 import 'package:nexo/services/firestore_service.dart';
 import 'package:nexo/services/quiz_service.dart';
 import 'package:nexo/screens/tela_detalhe_baralho_compartilhado.dart';
 import 'package:nexo/screens/tela_nexo_pad.dart';
 import 'package:nexo/screens/tela_realizar_quiz.dart';
-import 'package:nexo/widgets/user_avatar.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// --- TELA PRINCIPAL DO HUB (PAI COM O TABCONTROLLER) ---
+// TELA PRINCIPAL DO HUB (PAI COM O TABCONTROLLER)
 class TelaHubDetalhe extends StatefulWidget {
   final NexoHub hub;
   const TelaHubDetalhe({super.key, required this.hub});
@@ -26,13 +28,15 @@ class TelaHubDetalhe extends StatefulWidget {
 class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final String _currentUserId = FirebaseAuth.instance.currentUser!.uid;
+  late UserModel _currentUserProfile;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _currentUserProfile = Provider.of<UserModel?>(context, listen: false)!;
+    _tabController = TabController(length: 7, vsync: this);
     _tabController.addListener(() {
-      setState(() {}); // Força a reconstrução para atualizar o FAB
+      setState(() {}); 
     });
   }
   
@@ -42,65 +46,129 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
     super.dispose();
   }
 
-  // Lógica de abertura do Chat do Hub
-  void _openChat() async {
-    final chatService = context.read<ChatService>();
-    final existingRoom = await chatService.getChatRoomById(widget.hub.id);
-
-    if (existingRoom != null) {
-      if (mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (context) => TelaChatMensagens(chatRoom: existingRoom)),
-        );
-      }
-      return;
-    }
-    
-    final newChatRoom = ChatRoom(
-      id: widget.hub.id,
-      type: ChatRoomType.group,
-      memberIds: widget.hub.memberIds,
-      hubId: widget.hub.id,
-      memberInfo: {'hubName': widget.hub.name},
-      createdAt: Timestamp.now(),
-      lastMessageTimestamp: Timestamp.now(),
-    );
-
-    final createdRoom = await chatService.createChatRoom(newChatRoom);
-    if (createdRoom != null && mounted) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (context) => TelaChatMensagens(chatRoom: createdRoom)),
-      );
-    }
-  }
-
-  // Lógica do FAB Inteligente
   Widget? _buildFloatingActionButton() {
     switch (_tabController.index) {
-      case 2: // Aba Documentos
+      case 2: // Aba Agenda
+        if (_currentUserProfile.role == 'professor') {
+           return FloatingActionButton(
+            heroTag: 'add_event',
+            onPressed: () => _showCreateEventDialog(),
+            tooltip: 'Adicionar Evento',
+            child: const Icon(Icons.add_alert),
+          );
+        }
+        return null;
+      case 5: // Aba Documentos
         return FloatingActionButton(
+          heroTag: 'add_document',
           onPressed: () => _showCreateSharedDocumentDialog(),
           tooltip: 'Novo Documento',
-          child: const Icon(Icons.note_add), // ÍCONE CORRIGIDO
+          child: const Icon(Icons.note_add),
         );
-      case 3: // Aba Baralhos
+      case 6: // Aba Baralhos
         return FloatingActionButton(
+          heroTag: 'share_deck',
           onPressed: () => _showShareDeckDialog(),
           tooltip: 'Compartilhar Baralho Pessoal',
           child: const Icon(Icons.share),
         );
-      case 4: // Aba Provas
-        return FloatingActionButton(
-          onPressed: () => _showShareQuizDialog(),
-          tooltip: 'Compartilhar Prova Pessoal',
-          child: const Icon(Icons.share),
-        );
-      default: // Abas Sobre e Membros não têm FAB
+      default: 
         return null;
     }
   }
 
-  // Diálogo para criar novo documento
+  void _showCreateEventDialog({HubEvent? eventToEdit}) {
+    final isEditing = eventToEdit != null;
+    final titleController = TextEditingController(text: isEditing ? eventToEdit.title : '');
+    final linkController = TextEditingController();
+    Audience selectedAudience = Audience.hub;
+    
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          return AlertDialog(
+            title: Text(isEditing ? 'Editar Evento' : 'Criar Evento ou Aula'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: titleController,
+                    autofocus: true,
+                    decoration: InputDecoration(labelText: isEditing ? 'Título do Evento' : 'Título do Evento/Aula'),
+                  ),
+                  if (_currentUserProfile.role == 'professor' && !isEditing) ...[
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: linkController,
+                      decoration: const InputDecoration(
+                        labelText: 'Link do Google Meet (Opcional)',
+                        hintText: 'Cole para convocar uma aula',
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text('Se incluir um link, convocar para:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    RadioListTile<Audience>(
+                      title: Text('Apenas membros do Hub "${widget.hub.name}"'),
+                      value: Audience.hub,
+                      groupValue: selectedAudience,
+                      onChanged: (Audience? value) {
+                        setDialogState(() => selectedAudience = value!);
+                      },
+                    ),
+                    RadioListTile<Audience>(
+                      title: const Text('Todos os meus seguidores'),
+                      value: Audience.followers,
+                      groupValue: selectedAudience,
+                      onChanged: (Audience? value) {
+                        setDialogState(() => selectedAudience = value!);
+                      },
+                    ),
+                  ]
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Cancelar')),
+              ElevatedButton(
+                onPressed: () async {
+                  if (titleController.text.isNotEmpty) {
+                    Navigator.of(dialogContext).pop();
+                    final hubService = context.read<NexoHubService>();
+                    try {
+                      if (isEditing) {
+                        await hubService.updateEventInHub(widget.hub.id, eventToEdit!.id, titleController.text);
+                      } else {
+                        final dayToSave = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+                        
+                        await hubService.addEventToHub(
+                          widget.hub.id,
+                          title: titleController.text,
+                          date: dayToSave,
+                          meetLink: linkController.text.trim().isEmpty ? null : linkController.text.trim(),
+                          audience: linkController.text.trim().isEmpty ? null : selectedAudience.name,
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Erro ao salvar evento: $e'), backgroundColor: Colors.redAccent),
+                        );
+                      }
+                    }
+                  }
+                },
+                child: const Text('Salvar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   void _showCreateSharedDocumentDialog() {
     final titleController = TextEditingController();
     showDialog(
@@ -136,7 +204,6 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
     );
   }
 
-  // Diálogo para compartilhar baralho pessoal
   void _showShareDeckDialog() {
     final firestoreService = context.read<FirestoreService>();
     final hubService = context.read<NexoHubService>();
@@ -179,7 +246,6 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
     );
   }
 
-  // Diálogo para compartilhar prova pessoal
   void _showShareQuizDialog() {
     final quizService = context.read<QuizService>();
     final hubService = context.read<NexoHubService>();
@@ -191,7 +257,7 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
         content: SizedBox(
           width: double.maxFinite,
           child: StreamBuilder<List<Quiz>>(
-            stream: quizService.getAllQuizzesForUserStream(), // MÉTODO CORRIGIDO
+            stream: quizService.getAllQuizzesForUserStream(),
             builder: (context, snapshot) {
               if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
               if (snapshot.data!.isEmpty) return const Text('Você não possui nenhuma prova para compartilhar.');
@@ -227,31 +293,18 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.hub.name),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.hub_outlined),
-            onPressed: () {
-              Navigator.of(context).push(MaterialPageRoute(
-                builder: (context) => TelaMapaMental(hubId: widget.hub.id),
-              ));
-            },
-            tooltip: 'Mapa Mental do Hub',
-          ),
-          IconButton(
-            icon: const Icon(Icons.chat_bubble),
-            onPressed: _openChat,
-            tooltip: 'Chat do Hub',
-          )
-        ],
+        actions: const [],
         bottom: TabBar(
           controller: _tabController,
-          isScrollable: true, // Garante que as abas caibam
+          isScrollable: true, 
           tabs: const [
             Tab(icon: Icon(Icons.info_outline), text: 'Sobre'),
             Tab(icon: Icon(Icons.people), text: 'Membros'),
-            Tab(icon: Icon(Icons.edit_document), text: 'Docs'),
+            Tab(icon: Icon(Icons.calendar_month), text: 'Agenda'),
+            Tab(icon: Icon(Icons.chat_bubble), text: 'Chat'), 
+            Tab(icon: Icon(Icons.hub_outlined), text: 'Mapa'),
+            Tab(icon: Icon(Icons.note_add), text: 'Docs'),
             Tab(icon: Icon(Icons.style), text: 'Baralhos'),
-            Tab(icon: Icon(Icons.quiz), text: 'Provas'),
           ],
         ),
       ),
@@ -260,9 +313,16 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
         children: [
           _SobreTab(description: widget.hub.description),
           _MembrosTab(hubId: widget.hub.id),
+          TelaAgendaHub(
+            hubId: widget.hub.id,
+            hubName: widget.hub.name,
+            showEventDialog: _showCreateEventDialog,
+            currentUserProfile: _currentUserProfile,
+          ),
+          _HubChatWrapper(hub: widget.hub),
+          TelaMapaMental(hubId: widget.hub.id),
           _DocumentosTab(hubId: widget.hub.id),
           _BaralhosTab(hubId: widget.hub.id),
-          _ProvasTab(hubId: widget.hub.id),
         ],
       ),
       floatingActionButton: _buildFloatingActionButton(),
@@ -270,6 +330,68 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
   }
 }
 
+
+// --- WIDGET WRAPPER DO CHAT (CORRIGIDO PARA STATEFUL) ---
+class _HubChatWrapper extends StatefulWidget {
+  final NexoHub hub;
+  const _HubChatWrapper({required this.hub});
+
+  @override
+  State<_HubChatWrapper> createState() => _HubChatWrapperState();
+}
+
+class _HubChatWrapperState extends State<_HubChatWrapper> {
+  late Future<ChatRoom> _chatRoomFuture;
+  late final ChatService _chatService;
+
+  @override
+  void initState() {
+    super.initState();
+    _chatService = context.read<ChatService>();
+    _chatRoomFuture = _getOrCreateHubChat();
+  }
+
+  Future<ChatRoom> _getOrCreateHubChat() async {
+    final existingRoom = await _chatService.getChatRoomById(widget.hub.id);
+
+    if (existingRoom != null) {
+      return existingRoom;
+    }
+    
+    final newChatRoom = ChatRoom(
+      id: widget.hub.id,
+      type: ChatRoomType.group,
+      memberIds: widget.hub.memberIds,
+      hubId: widget.hub.id,
+      memberInfo: {'hubName': widget.hub.name},
+      createdAt: Timestamp.now(),
+      lastMessageTimestamp: Timestamp.now(),
+    );
+
+    final createdRoom = await _chatService.createChatRoom(newChatRoom);
+    return createdRoom!;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<ChatRoom>(
+      future: _chatRoomFuture, // Agora ouve o Future do initState
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+           return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Erro ao carregar o chat: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: Text('Não foi possível carregar a sala de chat.'));
+        }
+        final chatRoom = snapshot.data!;
+        return TelaChatMensagensSemAppBar(chatRoom: chatRoom);
+      },
+    );
+  }
+}
 
 // --- WIDGETS DAS ABAS (DEFINIDOS INTERNAMENTE) ---
 
@@ -381,7 +503,6 @@ class _BaralhosTab extends StatelessWidget {
                 title: Text(deck.nome),
                 onTap: () {
                   Navigator.of(context).push(MaterialPageRoute(
-                    // CONSTRUTOR CORRIGIDO
                     builder: (context) => TelaDetalheBaralhoCompartilhado(hubId: hubId, deckId: deck.id!, deckName: deck.nome),
                   ));
                 },
@@ -426,6 +547,150 @@ class _ProvasTab extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+// --- VERSÃO MODIFICADA DA TELA DE CHAT (SEM APPBAR) ---
+class TelaChatMensagensSemAppBar extends StatefulWidget {
+  final ChatRoom chatRoom;
+  const TelaChatMensagensSemAppBar({required this.chatRoom, super.key});
+
+  @override
+  State<TelaChatMensagensSemAppBar> createState() => _TelaChatMensagensSemAppBarState();
+}
+
+class _TelaChatMensagensSemAppBarState extends State<TelaChatMensagensSemAppBar> {
+  final ChatService _chatService = ChatService();
+  final ProfileService _profileService = ProfileService();
+  final _messageController = TextEditingController();
+  final String _currentUserId = FirebaseAuth.instance.currentUser!.uid;
+  
+  Map<String, UserModel> _memberProfiles = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _chatService.getMessagesStream(widget.chatRoom.id); // Inicia o stream
+    _fetchMemberProfiles();
+  }
+
+  Future<void> _fetchMemberProfiles() async {
+    if (widget.chatRoom.memberIds.isEmpty) return;
+    final profiles = await _profileService.getUsersFromIdList(widget.chatRoom.memberIds);
+    if (mounted) {
+      setState(() {
+        _memberProfiles = {for (var p in profiles) p.id: p};
+      });
+    }
+  }
+
+  void _sendMessage() {
+    if (_messageController.text.trim().isNotEmpty) {
+      _chatService.sendMessage(
+        roomId: widget.chatRoom.id,
+        text: _messageController.text,
+        senderId: _currentUserId,
+      );
+      _messageController.clear();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Expanded(
+          child: StreamBuilder<List<ChatMessage>>(
+            stream: _chatService.getMessagesStream(widget.chatRoom.id),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return const Center(child: Text('Nenhuma mensagem ainda. Diga olá!'));
+              }
+              final messages = snapshot.data!;
+              return ListView.builder(
+                reverse: true,
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                itemCount: messages.length,
+                itemBuilder: (context, index) {
+                  final message = messages[index];
+                  final isMe = message.senderId == _currentUserId;
+                  final senderProfile = _memberProfiles[message.senderId];
+                  return _buildMessageBubble(message, senderProfile, isMe);
+                },
+              );
+            },
+          ),
+        ),
+        _buildMessageInput(),
+      ],
+    );
+  }
+  
+  Widget _buildMessageBubble(ChatMessage message, UserModel? sender, bool isMe) {
+    final bubble = Container(
+      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
+      margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isMe ? Colors.blueAccent : Colors.grey[800],
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(message.text, style: const TextStyle(color: Colors.white)),
+    );
+
+    if (isMe) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [bubble],
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 8.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          UserAvatar(
+            username: sender?.username ?? '?',
+            photoUrl: sender?.photoUrl,
+            radius: 16,
+          ),
+          const SizedBox(width: 4),
+          bubble,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageInput() {
+    return Container(
+      padding: const EdgeInsets.all(8.0),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: Colors.grey.shade800)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _messageController,
+              decoration: const InputDecoration(
+                hintText: 'Digite uma mensagem...',
+                border: InputBorder.none,
+              ),
+              onSubmitted: (_) => _sendMessage(),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.send),
+            onPressed: _sendMessage,
+          ),
+        ],
+      ),
     );
   }
 }

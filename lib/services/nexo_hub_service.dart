@@ -9,7 +9,7 @@ class NexoHubService {
 
   CollectionReference<NexoHub> get _hubsRef =>
       _firestore.collection('hubs').withConverter<NexoHub>(
-            fromFirestore: (snapshot, options) => NexoHub.fromFirestore(snapshot), // Assinatura corrigida
+            fromFirestore: (snapshot, options) => NexoHub.fromFirestore(snapshot),
             toFirestore: (hub, _) => hub.toMap(),
           );
           
@@ -45,7 +45,6 @@ class NexoHubService {
 
     final batch = _firestore.batch();
     batch.set(newHubRef, newHub);
-    // Assinatura corrigida para o fromFirestore do ChatRoom
     batch.set(newChatRoomRef.withConverter(fromFirestore: (s, o) => ChatRoom.fromFirestore(s), toFirestore: (ChatRoom cr, _) => cr.toMap()), newChatRoom);
     await batch.commit();
   }
@@ -61,20 +60,52 @@ class NexoHubService {
     return await ProfileService().getUsersFromIdList(hub.memberIds);
   }
 
+  // --- MÉTODOS DE EVENTO/AGENDA RESTAURADOS ---
   Stream<List<HubEvent>> getEventsStream(String hubId) {
     return _hubsRef
         .doc(hubId)
         .collection('events')
         .orderBy('date', descending: true)
         .withConverter<HubEvent>(
-          fromFirestore: (snapshot, options) => HubEvent.fromFirestore(snapshot), // Assinatura corrigida
+          fromFirestore: (snapshot, options) => HubEvent.fromFirestore(snapshot),
           toFirestore: (event, _) => event.toMap(),
         )
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
   }
+
+  Future<void> addEventToHub(
+    String hubId, {
+    required String title,
+    required DateTime date,
+    String? meetLink,
+    String? audience,
+  }) async {
+    final userProfile = await ProfileService().getUserProfile(_currentUserId!);
+    if (userProfile == null) return;
+    
+    final newEvent = HubEvent(
+      id: '', // Firestore will generate
+      title: title,
+      date: date,
+      creatorId: userProfile.id,
+      creatorUsername: userProfile.username,
+      meetLink: meetLink,
+      audience: audience,
+    );
+    await _hubsRef.doc(hubId).collection('events').add(newEvent.toMap());
+  }
   
-  // MÉTODO RESTAURADO
+  Future<void> updateEventInHub(String hubId, String eventId, String newTitle) async {
+      await _hubsRef.doc(hubId).collection('events').doc(eventId).update({'title': newTitle});
+  }
+
+  Future<void> deleteEventFromHub(String hubId, String eventId) async {
+    await _hubsRef.doc(hubId).collection('events').doc(eventId).delete();
+  }
+  
+  // --- FIM DOS MÉTODOS DE EVENTO ---
+
   Stream<List<NexoHub>> getHubsForCurrentUser() {
     if (_currentUserId == null) return Stream.value([]);
     return _hubsRef
@@ -102,12 +133,10 @@ class NexoHubService {
     await batch.commit();
   }
   
-  // MÉTODO RESTAURADO
   Future<void> shareQuizWithHub({required String hubId, required Quiz quiz}) async {
     await _firestore.collection('hubs').doc(hubId).collection('quizzes').add(quiz.toMap());
   }
 
-  // MÉTODO RESTAURADO e CORRIGIDO
   Stream<List<Map<String, dynamic>>> getReceivedHubInvitesStream(String userId) {
     return _firestore
         .collection('hub_invites')
@@ -121,13 +150,11 @@ class NexoHubService {
             }).toList());
   }
 
-  // MÉTODO RESTAURADO
   Future<void> acceptHubInvite(String inviteId) async {
       final docRef = _firestore.collection('hub_invites').doc(inviteId);
       await docRef.update({'status': 'accepted'});
   }
 
-  // MÉTODO RESTAURADO
   Future<void> declineHubInvite(String inviteId) async {
       final docRef = _firestore.collection('hub_invites').doc(inviteId);
       await docRef.update({'status': 'declined'});
@@ -188,5 +215,36 @@ class NexoHubService {
     );
     await newDocRef.set(newDoc.toMap());
     return newDoc;
+  }
+  
+  // --- MÉTODOS DE RSVP ---
+
+  CollectionReference _getEventRsvpRef(String hubId, String eventId) {
+    return _hubsRef.doc(hubId).collection('events').doc(eventId).collection('rsvps');
+  }
+
+  Future<void> setRsvpForEvent({
+    required String hubId,
+    required String eventId,
+    required String userId,
+    required String username,
+    required String status, 
+  }) async {
+    await _getEventRsvpRef(hubId, eventId).doc(userId).set({
+      'status': status,
+      'username': username,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Stream<List<String>> getAttendingUsernamesStream(String hubId, String eventId) {
+    return _getEventRsvpRef(hubId, eventId)
+        .where('status', isEqualTo: 'attending')
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => (doc.data() as Map<String, dynamic>)['username'] as String).toList());
+  }
+
+  Stream<DocumentSnapshot> getUserRsvpStatusStream(String hubId, String eventId, String userId) {
+    return _getEventRsvpRef(hubId, eventId).doc(userId).snapshots();
   }
 }

@@ -209,7 +209,6 @@ class MindMapController extends ChangeNotifier {
     notifyListeners();
   }
 
-
   void centerView(Size screenSize) {
     if(_nodes.isEmpty) return;
     final rootNode = _nodes.firstWhere((n) => n.parentId == null);
@@ -272,7 +271,7 @@ class MindMapController extends ChangeNotifier {
   }
 }
 
-// --- Tela Principal ---
+// --- Tela Principal (AGORA SEM SCAFFOLD) ---
 class TelaMapaMental extends StatefulWidget {
   final String hubId;
   const TelaMapaMental({super.key, required this.hubId});
@@ -335,114 +334,111 @@ class _TelaMapaMentalState extends State<TelaMapaMental> {
   @override
   Widget build(BuildContext context) {
     if (_controller == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Carregando Mapa Mental...')),
-        body: const Center(child: CircularProgressIndicator()),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
     
     final screenSize = MediaQuery.of(context).size;
     
-    return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      appBar: AppBar(
-        title: const Text('Mapa Mental'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: _saveMap,
-            tooltip: 'Salvar Mapa',
-          )
-        ],
-      ),
-      body: Stack(
-        children: [
-          GestureDetector(
-             onScaleStart: (details) {
+    // REMOVIDO O SCAFFOLD E APPBAR
+    return Stack(
+      children: [
+        GestureDetector(
+           onScaleStart: (details) {
+            _panStartOffset = details.localFocalPoint;
+            final canvasTap = _controller!.screenToCanvas(details.localFocalPoint);
+            String? tappedNodeId;
+            for (final node in _controller!.getVisibleNodes().reversed) {
+              final nodeRect = Rect.fromCenter(center: node.position, width: node.size.width, height: node.size.height);
+              if (nodeRect.contains(canvasTap)) {
+                tappedNodeId = node.id;
+                break;
+              }
+            }
+            if (tappedNodeId != null) {
+               setState(() {
+                  _draggedNodeId = tappedNodeId;
+                  _dragStartCanvasPosition = canvasTap;
+                  _draggedNodeOriginalPosition = _controller!._getNodeById(tappedNodeId!)!.position;
+               });
+            } else {
               _panStartOffset = details.localFocalPoint;
-              final canvasTap = _controller!.screenToCanvas(details.localFocalPoint);
-              String? tappedNodeId;
-              for (final node in _controller!.getVisibleNodes().reversed) {
+            }
+          },
+          onScaleUpdate: (details) {
+            if (_draggedNodeId != null) {
+                final currentCanvasPosition = _controller!.screenToCanvas(details.localFocalPoint);
+                final canvasDelta = currentCanvasPosition - _dragStartCanvasPosition!;
+                _controller!.setNodePosition(_draggedNodeId!, _draggedNodeOriginalPosition! + canvasDelta);
+            } else if (details.scale == 1.0) {
+              _controller!.onPanUpdate(details.localFocalPoint - _panStartOffset);
+              _panStartOffset = details.localFocalPoint;
+            } else {
+               _controller!.onScaleUpdate(details);
+            }
+          },
+          onScaleEnd: (details) {
+             setState(() => _draggedNodeId = null);
+          },
+          onTapUp: (details) {
+            if (_draggedNodeId != null) {
+              _draggedNodeId = null; 
+              return;
+            }
+            final canvasTap = _controller!.screenToCanvas(details.localPosition);
+            MindMapNode? tappedNode;
+            for (final node in _controller!.getVisibleNodes().reversed) {
                 final nodeRect = Rect.fromCenter(center: node.position, width: node.size.width, height: node.size.height);
                 if (nodeRect.contains(canvasTap)) {
-                  tappedNodeId = node.id;
-                  break;
+                    tappedNode = node;
+                    break;
                 }
-              }
-              if (tappedNodeId != null) {
-                 setState(() {
-                    _draggedNodeId = tappedNodeId;
-                    _dragStartCanvasPosition = canvasTap;
-                    _draggedNodeOriginalPosition = _controller!._getNodeById(tappedNodeId!)!.position;
-                 });
+            }
+            
+            if (tappedNode != null) {
+              final toggleButtonRect = Rect.fromCircle(
+                center: tappedNode.position + Offset(tappedNode.size.width / 2, 0),
+                radius: 12,
+              );
+              if (toggleButtonRect.contains(canvasTap)) {
+                _controller!.toggleCollapse(tappedNode.id);
               } else {
-                _panStartOffset = details.localFocalPoint;
+                _controller!.selectNode(tappedNode.id);
               }
-            },
-            onScaleUpdate: (details) {
-              if (_draggedNodeId != null) {
-                  final currentCanvasPosition = _controller!.screenToCanvas(details.localFocalPoint);
-                  final canvasDelta = currentCanvasPosition - _dragStartCanvasPosition!;
-                  _controller!.setNodePosition(_draggedNodeId!, _draggedNodeOriginalPosition! + canvasDelta);
-              } else if (details.scale == 1.0) {
-                _controller!.onPanUpdate(details.localFocalPoint - _panStartOffset);
-                _panStartOffset = details.localFocalPoint;
-              } else {
-                 _controller!.onScaleUpdate(details);
-              }
-            },
-            onScaleEnd: (details) {
-               setState(() => _draggedNodeId = null);
-            },
-            onTapUp: (details) {
-              if (_draggedNodeId != null) {
-                _draggedNodeId = null; 
-                return;
-              }
-              final canvasTap = _controller!.screenToCanvas(details.localPosition);
-              MindMapNode? tappedNode;
-              for (final node in _controller!.getVisibleNodes().reversed) {
-                  final nodeRect = Rect.fromCenter(center: node.position, width: node.size.width, height: node.size.height);
-                  if (nodeRect.contains(canvasTap)) {
-                      tappedNode = node;
-                      break;
-                  }
-              }
-              
-              if (tappedNode != null) {
-                final toggleButtonRect = Rect.fromCircle(
-                  center: tappedNode.position + Offset(tappedNode.size.width / 2, 0),
-                  radius: 12,
-                );
-                if (toggleButtonRect.contains(canvasTap)) {
-                  _controller!.toggleCollapse(tappedNode.id);
-                } else {
-                  _controller!.selectNode(tappedNode.id);
+            } else {
+               _controller!.selectNode(null);
+            }
+          },
+          onDoubleTapDown: (details) {
+            final canvasTap = _controller!.screenToCanvas(details.localPosition);
+            for (final node in _controller!.getVisibleNodes().reversed) {
+                final nodeRect = Rect.fromCenter(center: node.position, width: node.size.width, height: node.size.height);
+                if (nodeRect.contains(canvasTap)) {
+                    _controller!.startEditing(node);
+                    break;
                 }
-              } else {
-                 _controller!.selectNode(null);
-              }
-            },
-            onDoubleTapDown: (details) {
-              final canvasTap = _controller!.screenToCanvas(details.localPosition);
-              for (final node in _controller!.getVisibleNodes().reversed) {
-                  final nodeRect = Rect.fromCenter(center: node.position, width: node.size.width, height: node.size.height);
-                  if (nodeRect.contains(canvasTap)) {
-                      _controller!.startEditing(node);
-                      break;
-                  }
-              }
-            },
-            child: CustomPaint(
-              painter: MindMapPainter(_controller!, context),
-              size: Size.infinite,
-            ),
+            }
+          },
+          child: CustomPaint(
+            painter: MindMapPainter(_controller!, context),
+            size: Size.infinite,
           ),
-          _buildToolbar(screenSize),
-          if (_controller!.editingNode != null)
-            _buildTextEditor(),
-        ],
-      ),
+        ),
+        _buildToolbar(screenSize),
+        if (_controller!.editingNode != null)
+          _buildTextEditor(),
+        
+        // Botão Salvar agora é flutuante
+        Positioned(
+          bottom: 16,
+          right: 16,
+          child: FloatingActionButton(
+            heroTag: 'save_mindmap',
+            onPressed: _saveMap,
+            tooltip: 'Salvar Mapa',
+            child: const Icon(Icons.save),
+          ),
+        )
+      ],
     );
   }
 
@@ -536,6 +532,7 @@ class _TelaMapaMentalState extends State<TelaMapaMental> {
   }
 }
 
+// --- Painter ---
 class MindMapPainter extends CustomPainter {
   final MindMapController controller;
   final BuildContext context;

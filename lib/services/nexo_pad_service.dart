@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/models.dart';
 
+// Este serviço agora gerencia APENAS documentos pessoais do Nexo Pad
 class NexoPadService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String? _userId = FirebaseAuth.instance.currentUser?.uid;
@@ -18,16 +19,16 @@ class NexoPadService {
   }
 
   Future<NexoPadDocument> createNewDocument() async {
-    final newDocRef = _getDocsRef().doc(); // Gera um ID
+    final newDocRef = _getDocsRef().doc(); 
     final newDoc = NexoPadDocument(
-      id: newDocRef.id, // Passa o ID no construtor
+      id: newDocRef.id, 
       title: 'Novo Documento',
       ownerId: _userId!,
       contentJson: '[{"insert":"\\n"}]',
       createdAt: Timestamp.now(),
       lastEdited: Timestamp.now(),
     );
-    await newDocRef.set(newDoc.toMap()); // Salva o documento com o ID correto
+    await newDocRef.set(newDoc.toMap());
     return newDoc;
   }
 
