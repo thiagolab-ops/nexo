@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// --- MODELOS DE POST E COMMENT RESTAURADOS ---
+// --- MODELOS DE POST E COMMENT ---
 
 class Post {
   final String id;
@@ -403,16 +403,17 @@ class NexoHub {
   } 
 }
 
+// --- CLASSE DO NEXO PAD CORRIGIDA ---
 class NexoPadDocument { 
   String id; 
   String title; 
   final String ownerId; 
   String contentJson; 
   final Timestamp createdAt;
-  final Timestamp lastEdited; 
+  Timestamp lastEdited;         // <<< 'final' REMOVIDO
   final String? hubId; 
-  final String? lastEditorId; 
-  final String? lastEditorUsername; 
+  String? lastEditorId;         // <<< 'final' REMOVIDO
+  String? lastEditorUsername;   // <<< 'final' REMOVIDO
   
   NexoPadDocument({ 
     required this.id, 
@@ -441,6 +442,8 @@ class NexoPadDocument {
     ); 
   } 
   
+  // Este toMap() é usado principalmente para CRIAR (set) um novo documento.
+  // As funções de update agora usam um mapa explícito para segurança.
   Map<String, dynamic> toMap() { 
     return { 
       'title': title, 
@@ -449,10 +452,12 @@ class NexoPadDocument {
       'createdAt': createdAt,
       'lastEdited': lastEdited, 
       'lastEditorId': lastEditorId, 
-      'lastEditorUsername': lastEditorUsername, 
+      'lastEditorUsername': lastEditorUsername,
+      'hubId': hubId, // Adicionado para garantir que seja salvo na criação
     }; 
   } 
 }
+// --- FIM DA CORREÇÃO ---
 
 enum ChatRoomType { dm, group }
 

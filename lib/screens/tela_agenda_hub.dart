@@ -1,243 +1,146 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:nexo/models/models.dart';
 import 'package:nexo/services/nexo_hub_service.dart';
+import 'package:provider/provider.dart';
+import 'package:table_calendar/table_calendar.dart';
 
 class TelaAgendaHub extends StatefulWidget {
   final String hubId;
   final String hubName;
-  
-  const TelaAgendaHub({super.key, required this.hubId, required this.hubName});
+  // ACEITA OS PARÂMETROS DO PAI (tela_hub_detalhe)
+  final Function({HubEvent? eventToEdit}) showEventDialog;
+  final UserModel currentUserProfile;
+
+  const TelaAgendaHub({
+    super.key,
+    required this.hubId,
+    required this.hubName,
+    required this.showEventDialog,
+    required this.currentUserProfile,
+  });
 
   @override
-  _TelaAgendaHubState createState() => _TelaAgendaHubState();
+  State<TelaAgendaHub> createState() => _TelaAgendaHubState();
 }
 
 class _TelaAgendaHubState extends State<TelaAgendaHub> {
-  final NexoHubService _hubService = NexoHubService();
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _descriptionController = TextEditingController();
-  final TextEditingController _locationController = TextEditingController();
-  DateTime? _selectedDate;
-  TimeOfDay? _selectedStartTime;
-  TimeOfDay? _selectedEndTime;
-  HubEvent? _eventToEdit;
-  bool _isEditing = false;
+  late final NexoHubService _hubService;
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay;
+
+  // Mapa para armazenar os eventos agrupados por data
+  Map<DateTime, List<HubEvent>> _eventsMap = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _hubService = context.read<NexoHubService>();
+    _selectedDay = _focusedDay;
+  }
+
+  List<HubEvent> _getEventsForDay(DateTime day) {
+    // Retorna a lista de eventos para o dia selecionado (ignorando a hora)
+    return _eventsMap[DateTime(day.year, day.month, day.day)] ?? [];
+  }
+
+  void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
+    if (!isSameDay(_selectedDay, selectedDay)) {
+      setState(() {
+        _selectedDay = selectedDay;
+        _focusedDay = focusedDay;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.hubName),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: StreamBuilder<List<HubEvent>>(
-              stream: _hubService.getEventsStream(widget.hubId),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(child: Text('Nenhum evento encontrado'));
-                }
-                
-                final events = snapshot.data!;
-                
-                return ListView.builder(
-                  itemCount: events.length,
-                  itemBuilder: (context, index) {
-                    final event = events[index];
-                    return ListTile(
-                      title: Text(event.title),
-                      subtitle: Text('${event.date.day}/${event.date.month}/${event.date.year}'),
-                      trailing: PopupMenuButton<String>(
-                        onSelected: (value) {
-                          if (value == 'edit') {
-                            _showEventDialog(eventToEdit: event);
-                          } else if (value == 'delete') {
-                            _hubService.deleteEventFromHub(widget.hubId, event.id);
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'edit',
-                            child: Text('Editar'),
-                          ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Text('Excluir'),
-                          ),
-                        ],
-                      ),
-                      onTap: () => _showEventDialog(eventToEdit: event),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: ElevatedButton(
-              onPressed: () => _showEventDialog(),
-              child: const Text('Adicionar Evento'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    return StreamBuilder<List<HubEvent>>(
+      stream: _hubService.getEventsStream(widget.hubId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Erro ao carregar eventos: ${snapshot.error}'));
+        }
 
-  void _showEventDialog({HubEvent? eventToEdit}) {
-    _isEditing = eventToEdit != null;
-    
-    if (_isEditing) {
-      _eventToEdit = eventToEdit;
-      _titleController.text = eventToEdit!.title;
-      _descriptionController.text = eventToEdit.description ?? '';
-      _locationController.text = eventToEdit.location ?? '';
-      _selectedDate = eventToEdit.date;
-      _selectedStartTime = TimeOfDay.fromDateTime(eventToEdit.date);
-      _selectedEndTime = TimeOfDay.fromDateTime(eventToEdit.endTime);
-    } else {
-      _titleController.clear();
-      _descriptionController.clear();
-      _locationController.clear();
-      _selectedDate = null;
-      _selectedStartTime = null;
-      _selectedEndTime = null;
-    }
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(_isEditing ? 'Editar Evento' : 'Adicionar Evento'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _titleController,
-                decoration: const InputDecoration(labelText: 'Título'),
+        final allEvents = snapshot.data ?? [];
+        // Processa os eventos para o mapa
+        _eventsMap = {};
+        for (final event in allEvents) {
+          final eventDay = DateTime(event.date.year, event.date.month, event.date.day);
+          if (_eventsMap[eventDay] == null) {
+            _eventsMap[eventDay] = [];
+          }
+          _eventsMap[eventDay]!.add(event);
+        }
+
+        final selectedDayEvents = _getEventsForDay(_selectedDay ?? DateTime.now());
+
+        return Column(
+          children: [
+            TableCalendar<HubEvent>(
+              firstDay: DateTime.utc(2020, 1, 1),
+              lastDay: DateTime.utc(2030, 12, 31),
+              focusedDay: _focusedDay,
+              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+              onDaySelected: _onDaySelected,
+              eventLoader: _getEventsForDay, // Mostra o marcador no calendário
+              calendarStyle: const CalendarStyle(
+                todayDecoration: BoxDecoration(color: Colors.grey, shape: BoxShape.circle),
+                selectedDecoration: BoxDecoration(color: Colors.blueAccent, shape: BoxShape.circle),
               ),
-              TextField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(labelText: 'Descrição'),
+              headerStyle: const HeaderStyle(
+                formatButtonVisible: false,
+                titleCentered: true,
               ),
-              TextField(
-                controller: _locationController,
-                decoration: const InputDecoration(labelText: 'Localização'),
-              ),
-              ListTile(
-                title: const Text('Data'),
-                trailing: TextButton(
-                  onPressed: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _selectedDate ?? DateTime.now(),
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 365)),
-                    );
-                    if (date != null) {
-                      setState(() => _selectedDate = date);
-                    }
-                  },
-                  child: Text(_selectedDate != null 
-                      ? '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}'
-                      : 'Selecionar data'),
-                ),
-              ),
-              ListTile(
-                title: const Text('Horário de início'),
-                trailing: TextButton(
-                  onPressed: () async {
-                    final time = await showTimePicker(
-                      context: context,
-                      initialTime: _selectedStartTime ?? TimeOfDay.now(),
-                    );
-                    if (time != null) {
-                      setState(() => _selectedStartTime = time);
-                    }
-                  },
-                  child: Text(_selectedStartTime?.format(context) ?? 'Selecionar horário'),
-                ),
-              ),
-              ListTile(
-                title: const Text('Horário de término'),
-                trailing: TextButton(
-                  onPressed: () async {
-                    final time = await showTimePicker(
-                      context: context,
-                      initialTime: _selectedEndTime ?? TimeOfDay.now(),
-                    );
-                    if (time != null) {
-                      setState(() => _selectedEndTime = time);
-                    }
-                  },
-                  child: Text(_selectedEndTime?.format(context) ?? 'Selecionar horário'),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (_titleController.text.isNotEmpty && 
-                  _selectedDate != null && 
-                  _selectedStartTime != null && 
-                  _selectedEndTime != null) {
-                
-                final startTime = DateTime(
-                  _selectedDate!.year,
-                  _selectedDate!.month,
-                  _selectedDate!.day,
-                  _selectedStartTime!.hour,
-                  _selectedStartTime!.minute,
-                );
-                
-                final endTime = DateTime(
-                  _selectedDate!.year,
-                  _selectedDate!.month,
-                  _selectedDate!.day,
-                  _selectedEndTime!.hour,
-                  _selectedEndTime!.minute,
-                );
-                
-                if (_isEditing) {
-                  _hubService.updateEventInHub(
-                    hubId: widget.hubId,
-                    eventId: eventToEdit!.id,
-                    title: _titleController.text,
-                    description: _descriptionController.text,
-                    date: startTime,
-                    endTime: endTime,
-                    location: _locationController.text,
+            ),
+            const Divider(height: 8),
+            Expanded(
+              child: ListView.builder(
+                itemCount: selectedDayEvents.length,
+                itemBuilder: (context, index) {
+                  final event = selectedDayEvents[index];
+                  bool isOwner = event.creatorId == widget.currentUserProfile.id;
+                  
+                  return Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    child: ListTile(
+                      title: Text(event.title),
+                      subtitle: Text('Criado por ${event.creatorUsername}'),
+                      trailing: (isOwner || widget.currentUserProfile.role == 'professor')
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit, size: 20),
+                                tooltip: 'Editar Título',
+                                onPressed: () {
+                                  // CHAMA A FUNÇÃO DO PAI
+                                  widget.showEventDialog(eventToEdit: event);
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
+                                tooltip: 'Excluir Evento',
+                                onPressed: () {
+                                  // Deleta diretamente
+                                  _hubService.deleteEventFromHub(widget.hubId, event.id);
+                                },
+                              ),
+                            ],
+                          )
+                        : null,
+                      // AQUI VAI ENTRAR NOSSA LÓGICA DE RSVP
+                    ),
                   );
-                } else {
-                  _hubService.addEventToHub(
-                    hubId: widget.hubId,
-                    title: _titleController.text,
-                    description: _descriptionController.text,
-                    date: startTime,
-                    endTime: endTime,
-                    location: _locationController.text,
-                  );
-                }
-                
-                Navigator.of(context).pop();
-              }
-            },
-            child: const Text('Salvar'),
-          ),
-        ],
-      ),
+                },
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

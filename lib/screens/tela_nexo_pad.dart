@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:nexo/models/models.dart';
+import 'package:nexo/services/nexo_hub_service.dart';
 import 'package:nexo/services/nexo_pad_service.dart';
 import 'package:nexo/services/profile_service.dart';
 import 'package:nexo/widgets/calculadora_flutuante.dart';
@@ -19,6 +20,7 @@ class TelaNexoPad extends StatefulWidget {
 class _TelaNexoPadState extends State<TelaNexoPad> {
   late quill.QuillController _controller;
   final NexoPadService _nexoPadService = NexoPadService();
+  final NexoHubService _nexoHubService = NexoHubService();
   final ProfileService _profileService = ProfileService();
   UserModel? _currentUserProfile;
   bool _showCalculator = false;
@@ -64,26 +66,57 @@ class _TelaNexoPadState extends State<TelaNexoPad> {
     }
   }
 
+  // --- FUNÇÃO DE SALVAR CORRIGIDA ---
   void _saveDocument() async {
+  
+    // --- INÍCIO DA CORREÇÃO ---
+    // Adiciona uma trava de segurança. Se o perfil do usuário ainda não carregou,
+    // ele exibe um aviso e impede o salvamento (que falharia).
+    if (_currentUserProfile == null) {
+      if(mounted){
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Perfil de usuário ainda carregando... Tente novamente em 1 segundo.'), backgroundColor: Colors.orangeAccent),
+        );
+      }
+      return; // ABORTA O SALVAMENTO
+    }
+    // --- FIM DA CORREÇÃO ---
+
     final updatedDocument = NexoPadDocument(
       id: widget.document.id,
       title: widget.document.title,
       contentJson: jsonEncode(_controller.document.toDelta().toJson()),
       ownerId: widget.document.ownerId,
-      lastEditorId: _currentUserProfile?.id,
-      lastEditorUsername: _currentUserProfile?.username,
+      lastEditorId: _currentUserProfile!.id, // Agora é seguro usar '!'
+      lastEditorUsername: _currentUserProfile!.username, // Agora é seguro usar '!'
       createdAt: widget.document.createdAt,
       lastEdited: Timestamp.now(),
+      hubId: widget.document.hubId,
     );
     
-    await _nexoPadService.updateDocument(updatedDocument);
+    try {
+      if (widget.document.hubId != null && widget.document.hubId!.isNotEmpty) {
+        // É um documento de Hub
+        await _nexoHubService.updateSharedDocument(widget.document.hubId!, updatedDocument);
+      } else {
+        // É um documento pessoal
+        await _nexoPadService.updateDocument(updatedDocument);
+      }
     
-    if(mounted){
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Documento salvo!'), backgroundColor: Colors.green),
-      );
+      if(mounted){
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Documento salvo!'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+       if(mounted){
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao salvar: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
+  // --- FIM DA FUNÇÃO SALVAR ---
 
   @override
   Widget build(BuildContext context) {

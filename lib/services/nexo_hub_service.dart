@@ -5,17 +5,23 @@ import 'package:nexo/services/profile_service.dart';
 
 class NexoHubService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final String? _currentUserId = FirebaseAuth.instance.currentUser?.uid;
+  
+  String get _currentUserId {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw Exception('Usuário não autenticado.');
+    }
+    return user.uid;
+  }
 
   CollectionReference<NexoHub> get _hubsRef =>
       _firestore.collection('hubs').withConverter<NexoHub>(
-            fromFirestore: (snapshot, options) => NexoHub.fromFirestore(snapshot), // Assinatura corrigida
+            fromFirestore: (snapshot, options) => NexoHub.fromFirestore(snapshot),
             toFirestore: (hub, _) => hub.toMap(),
           );
           
   Future<void> createHub({required String name, String? description}) async {
-    if (_currentUserId == null) return;
-    final userProfile = await ProfileService().getUserProfile(_currentUserId!);
+    final userProfile = await ProfileService().getUserProfile(_currentUserId);
     if (userProfile == null) return;
 
     final newHubRef = _hubsRef.doc();
@@ -25,19 +31,19 @@ class NexoHubService {
       id: newHubRef.id,
       name: name,
       description: description ?? '',
-      ownerId: _currentUserId!,
-      memberIds: [_currentUserId!],
+      ownerId: _currentUserId,
+      memberIds: [_currentUserId],
       createdAt: Timestamp.now(),
     );
 
     final newChatRoom = ChatRoom(
       id: newHubRef.id,
       type: ChatRoomType.group,
-      memberIds: [_currentUserId!],
+      memberIds: [_currentUserId],
       hubId: newHubRef.id,
       memberInfo: { 
         'hubName': name,
-        _currentUserId!: userProfile.username,
+        _currentUserId: userProfile.username,
       },
       createdAt: Timestamp.now(),
       lastMessageTimestamp: Timestamp.now(),
@@ -45,7 +51,6 @@ class NexoHubService {
 
     final batch = _firestore.batch();
     batch.set(newHubRef, newHub);
-    // Assinatura corrigida para o fromFirestore do ChatRoom
     batch.set(newChatRoomRef.withConverter(fromFirestore: (s, o) => ChatRoom.fromFirestore(s), toFirestore: (ChatRoom cr, _) => cr.toMap()), newChatRoom);
     await batch.commit();
   }
@@ -67,18 +72,49 @@ class NexoHubService {
         .collection('events')
         .orderBy('date', descending: true)
         .withConverter<HubEvent>(
-          fromFirestore: (snapshot, options) => HubEvent.fromFirestore(snapshot), // Assinatura corrigida
+          fromFirestore: (snapshot, options) => HubEvent.fromFirestore(snapshot),
           toFirestore: (event, _) => event.toMap(),
         )
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
   }
+
+  Future<void> addEventToHub(
+    String hubId, {
+    required String title,
+    required DateTime date,
+    String? meetLink,
+    String? audience,
+  }) async {
+    final userProfile = await ProfileService().getUserProfile(_currentUserId);
+    if (userProfile == null) return;
+    
+    final newEvent = HubEvent(
+      id: '', // Firestore will generate
+      title: title,
+      date: date,
+      creatorId: userProfile.id,
+      creatorUsername: userProfile.username,
+      meetLink: meetLink,
+      audience: audience,
+    );
+    await _hubsRef.doc(hubId).collection('events').add(newEvent.toMap());
+  }
   
-  // MÉTODO RESTAURADO
+  Future<void> updateEventInHub(String hubId, String eventId, String newTitle) async {
+      await _hubsRef.doc(hubId).collection('events').doc(eventId).update({'title': newTitle});
+  }
+
+  Future<void> deleteEventFromHub(String hubId, String eventId) async {
+    await _hubsRef.doc(hubId).collection('events').doc(eventId).delete();
+  }
+  
   Stream<List<NexoHub>> getHubsForCurrentUser() {
-    if (_currentUserId == null) return Stream.value([]);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return Stream.value([]);
+    
     return _hubsRef
-        .where('memberIds', arrayContains: _currentUserId)
+        .where('memberIds', arrayContains: user.uid)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
   }
@@ -102,12 +138,10 @@ class NexoHubService {
     await batch.commit();
   }
   
-  // MÉTODO RESTAURADO
   Future<void> shareQuizWithHub({required String hubId, required Quiz quiz}) async {
     await _firestore.collection('hubs').doc(hubId).collection('quizzes').add(quiz.toMap());
   }
 
-  // MÉTODO RESTAURADO e CORRIGIDO
   Stream<List<Map<String, dynamic>>> getReceivedHubInvitesStream(String userId) {
     return _firestore
         .collection('hub_invites')
@@ -121,13 +155,11 @@ class NexoHubService {
             }).toList());
   }
 
-  // MÉTODO RESTAURADO
   Future<void> acceptHubInvite(String inviteId) async {
       final docRef = _firestore.collection('hub_invites').doc(inviteId);
       await docRef.update({'status': 'accepted'});
   }
 
-  // MÉTODO RESTAURADO
   Future<void> declineHubInvite(String inviteId) async {
       final docRef = _firestore.collection('hub_invites').doc(inviteId);
       await docRef.update({'status': 'declined'});
@@ -176,17 +208,36 @@ class NexoHubService {
     required String hubId,
     required String title,
     required String ownerId,
+    String? initialContentJson, // Adicionado para compartilhar
   }) async {
     final newDocRef = _firestore.collection('hubs').doc(hubId).collection('documents').doc();
     final newDoc = NexoPadDocument(
       id: newDocRef.id,
       title: title,
       ownerId: ownerId,
-      contentJson: '[{"insert":"\\n"}]',
+      contentJson: initialContentJson ?? '[{"insert":"\\n"}]', // Usa o conteúdo inicial ou um doc em branco
       createdAt: Timestamp.now(),
       lastEdited: Timestamp.now(),
+      hubId: hubId, // <<< CORREÇÃO DO BUG ORIGINAL
     );
     await newDocRef.set(newDoc.toMap());
     return newDoc;
+  }
+  
+  Future<void> updateSharedDocument(String hubId, NexoPadDocument document) async {
+    final docRef = _firestore.collection('hubs').doc(hubId).collection('documents').doc(document.id);
+    
+    await docRef.update({
+      'title': document.title,
+      'contentJson': document.contentJson,
+      'lastEdited': document.lastEdited,
+      'lastEditorId': document.lastEditorId,
+      'lastEditorUsername': document.lastEditorUsername,
+    });
+  }
+
+  // --- NOVA FUNÇÃO ADICIONADA ---
+  Future<void> deleteSharedDocument(String hubId, String docId) async {
+    await _firestore.collection('hubs').doc(hubId).collection('documents').doc(docId).delete();
   }
 }
