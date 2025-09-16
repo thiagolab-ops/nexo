@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:nexo/models/models.dart';
 import 'package:nexo/services/nexo_hub_service.dart';
+import 'package:nexo/services/profile_service.dart'; // Import necessário
+import 'package:nexo/widgets/user_avatar.dart'; // Import necessário
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 class TelaAgendaHub extends StatefulWidget {
   final String hubId;
   final String hubName;
-  // ACEITA OS PARÂMETROS DO PAI (tela_hub_detalhe)
   final Function({HubEvent? eventToEdit}) showEventDialog;
   final UserModel currentUserProfile;
 
@@ -26,21 +26,21 @@ class TelaAgendaHub extends StatefulWidget {
 
 class _TelaAgendaHubState extends State<TelaAgendaHub> {
   late final NexoHubService _hubService;
+  late final ProfileService _profileService;
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
 
-  // Mapa para armazenar os eventos agrupados por data
   Map<DateTime, List<HubEvent>> _eventsMap = {};
 
   @override
   void initState() {
     super.initState();
     _hubService = context.read<NexoHubService>();
+    _profileService = context.read<ProfileService>(); // Inicializa o ProfileService
     _selectedDay = _focusedDay;
   }
 
   List<HubEvent> _getEventsForDay(DateTime day) {
-    // Retorna a lista de eventos para o dia selecionado (ignorando a hora)
     return _eventsMap[DateTime(day.year, day.month, day.day)] ?? [];
   }
 
@@ -51,6 +51,59 @@ class _TelaAgendaHubState extends State<TelaAgendaHub> {
         _focusedDay = focusedDay;
       });
     }
+  }
+
+  // --- LÓGICA DE RSVP ADICIONADA ---
+
+  void _handleRsvp(HubEvent event, bool isAttending) {
+    _hubService.rsvpToEvent(
+      hubId: widget.hubId,
+      eventId: event.id,
+      userId: widget.currentUserProfile.id,
+      isAttending: isAttending,
+    );
+  }
+
+  void _showAttendeesDialog(HubEvent event) {
+    if (event.attendees.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ninguém confirmou presença ainda.')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Lista de Confirmados (${event.attendees.length})'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: FutureBuilder<List<UserModel>>(
+            future: _profileService.getUsersFromIdList(event.attendees),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final users = snapshot.data!;
+              return ListView.builder(
+                shrinkWrap: true,
+                itemCount: users.length,
+                itemBuilder: (context, index) {
+                  final user = users[index];
+                  return ListTile(
+                    leading: UserAvatar(username: user.username, photoUrl: user.photoUrl),
+                    title: Text(user.username),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Fechar')),
+        ],
+      ),
+    );
   }
 
   @override
@@ -66,7 +119,6 @@ class _TelaAgendaHubState extends State<TelaAgendaHub> {
         }
 
         final allEvents = snapshot.data ?? [];
-        // Processa os eventos para o mapa
         _eventsMap = {};
         for (final event in allEvents) {
           final eventDay = DateTime(event.date.year, event.date.month, event.date.day);
@@ -86,7 +138,7 @@ class _TelaAgendaHubState extends State<TelaAgendaHub> {
               focusedDay: _focusedDay,
               selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
               onDaySelected: _onDaySelected,
-              eventLoader: _getEventsForDay, // Mostra o marcador no calendário
+              eventLoader: _getEventsForDay,
               calendarStyle: const CalendarStyle(
                 todayDecoration: BoxDecoration(color: Colors.grey, shape: BoxShape.circle),
                 selectedDecoration: BoxDecoration(color: Colors.blueAccent, shape: BoxShape.circle),
@@ -102,37 +154,92 @@ class _TelaAgendaHubState extends State<TelaAgendaHub> {
                 itemCount: selectedDayEvents.length,
                 itemBuilder: (context, index) {
                   final event = selectedDayEvents[index];
-                  bool isOwner = event.creatorId == widget.currentUserProfile.id;
-                  
+                  final bool isOwner = event.creatorId == widget.currentUserProfile.id;
+                  final bool isProfessor = widget.currentUserProfile.role == 'professor';
+                  final bool isAttending = event.attendees.contains(widget.currentUserProfile.id);
+
+                  // CARD DO EVENTO (SUBSTITUINDO O LISTTILE SIMPLES)
                   return Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    child: ListTile(
-                      title: Text(event.title),
-                      subtitle: Text('Criado por ${event.creatorUsername}'),
-                      trailing: (isOwner || widget.currentUserProfile.role == 'professor')
-                        ? Row(
-                            mainAxisSize: MainAxisSize.min,
+                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // --- LINHA DO TÍTULO E BOTÕES DE ADMIN ---
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              IconButton(
-                                icon: const Icon(Icons.edit, size: 20),
-                                tooltip: 'Editar Título',
-                                onPressed: () {
-                                  // CHAMA A FUNÇÃO DO PAI
-                                  widget.showEventDialog(eventToEdit: event);
-                                },
+                              Expanded(
+                                child: Text(event.title, style: Theme.of(context).textTheme.titleLarge),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
-                                tooltip: 'Excluir Evento',
-                                onPressed: () {
-                                  // Deleta diretamente
-                                  _hubService.deleteEventFromHub(widget.hubId, event.id);
-                                },
+                              if (isOwner || isProfessor)
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit, size: 20),
+                                      tooltip: 'Editar Título',
+                                      onPressed: () => widget.showEventDialog(eventToEdit: event),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
+                                      tooltip: 'Excluir Evento',
+                                      onPressed: () => _hubService.deleteEventFromHub(widget.hubId, event.id),
+                                    ),
+                                  ],
+                                ),
+                            ],
+                          ),
+                          Text('Criado por ${event.creatorUsername}', style: Theme.of(context).textTheme.bodySmall),
+                          const Divider(height: 20),
+                          // --- LINHA DE STATUS DO RSVP ---
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text('${event.attendees.length} Confirmados', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                              if (isOwner || isProfessor)
+                                TextButton(
+                                  child: const Text('Ver Lista'),
+                                  onPressed: () => _showAttendeesDialog(event),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          // --- LINHA DE AÇÃO DO RSVP ---
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  icon: const Icon(Icons.check),
+                                  label: const Text('Vou'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: isAttending ? Colors.green : Colors.grey[700],
+                                  ),
+                                  onPressed: isAttending ? null : () => _handleRsvp(event, true),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  icon: const Icon(Icons.close),
+                                  label: const Text('Não Vou'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: !isAttending ? Colors.redAccent : Colors.grey[700],
+                                  ),
+                                  onPressed: !isAttending ? null : () => _handleRsvp(event, false),
+                                ),
                               ),
                             ],
-                          )
-                        : null,
-                      // AQUI VAI ENTRAR NOSSA LÓGICA DE RSVP
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 },

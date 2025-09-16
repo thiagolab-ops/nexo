@@ -197,6 +197,7 @@ class NotificationModel {
   }
 }
 
+// --- HubEvent ATUALIZADO ---
 class HubEvent {
   final String id;
   final String title;
@@ -205,6 +206,7 @@ class HubEvent {
   final String creatorUsername;
   final String? meetLink;
   final String? audience;
+  final List<String> attendees; // <<< ADICIONADO PARA O RSVP
 
   HubEvent({
     required this.id,
@@ -214,6 +216,7 @@ class HubEvent {
     required this.creatorUsername,
     this.meetLink,
     this.audience,
+    this.attendees = const [], // <<< ADICIONADO
   });
 
   factory HubEvent.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc, [SnapshotOptions? options]) {
@@ -226,6 +229,7 @@ class HubEvent {
       creatorUsername: data['creatorUsername'] ?? '',
       meetLink: data['meetLink'],
       audience: data['audience'],
+      attendees: List<String>.from(data['attendees'] ?? []), // <<< ADICIONADO
     );
   }
 
@@ -237,9 +241,11 @@ class HubEvent {
       'creatorUsername': creatorUsername,
       'meetLink': meetLink,
       'audience': audience,
+      'attendees': attendees, // <<< ADICIONADO
     };
   }
 }
+// --- FIM DA ATUALIZAÇÃO ---
 
 class UserModel {
   final String id;
@@ -403,17 +409,16 @@ class NexoHub {
   } 
 }
 
-// --- CLASSE DO NEXO PAD CORRIGIDA ---
 class NexoPadDocument { 
   String id; 
   String title; 
   final String ownerId; 
   String contentJson; 
   final Timestamp createdAt;
-  Timestamp lastEdited;         // <<< 'final' REMOVIDO
+  Timestamp lastEdited;
   final String? hubId; 
-  String? lastEditorId;         // <<< 'final' REMOVIDO
-  String? lastEditorUsername;   // <<< 'final' REMOVIDO
+  String? lastEditorId;
+  String? lastEditorUsername;
   
   NexoPadDocument({ 
     required this.id, 
@@ -442,8 +447,6 @@ class NexoPadDocument {
     ); 
   } 
   
-  // Este toMap() é usado principalmente para CRIAR (set) um novo documento.
-  // As funções de update agora usam um mapa explícito para segurança.
   Map<String, dynamic> toMap() { 
     return { 
       'title': title, 
@@ -453,11 +456,10 @@ class NexoPadDocument {
       'lastEdited': lastEdited, 
       'lastEditorId': lastEditorId, 
       'lastEditorUsername': lastEditorUsername,
-      'hubId': hubId, // Adicionado para garantir que seja salvo na criação
+      'hubId': hubId,
     }; 
   } 
 }
-// --- FIM DA CORREÇÃO ---
 
 enum ChatRoomType { dm, group }
 

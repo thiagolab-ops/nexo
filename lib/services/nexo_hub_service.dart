@@ -66,6 +66,8 @@ class NexoHubService {
     return await ProfileService().getUsersFromIdList(hub.memberIds);
   }
 
+  // --- Funções da Agenda ---
+
   Stream<List<HubEvent>> getEventsStream(String hubId) {
     return _hubsRef
         .doc(hubId)
@@ -97,6 +99,7 @@ class NexoHubService {
       creatorUsername: userProfile.username,
       meetLink: meetLink,
       audience: audience,
+      attendees: [], // Começa com lista vazia
     );
     await _hubsRef.doc(hubId).collection('events').add(newEvent.toMap());
   }
@@ -108,6 +111,29 @@ class NexoHubService {
   Future<void> deleteEventFromHub(String hubId, String eventId) async {
     await _hubsRef.doc(hubId).collection('events').doc(eventId).delete();
   }
+
+  // <<< NOVA FUNÇÃO DE RSVP ADICIONADA >>>
+  Future<void> rsvpToEvent({
+    required String hubId,
+    required String eventId,
+    required String userId,
+    required bool isAttending,
+  }) async {
+    final eventRef = _hubsRef.doc(hubId).collection('events').doc(eventId);
+
+    if (isAttending) {
+      // Adiciona o usuário à lista (sem duplicatas)
+      await eventRef.update({
+        'attendees': FieldValue.arrayUnion([userId])
+      });
+    } else {
+      // Remove o usuário da lista
+      await eventRef.update({
+        'attendees': FieldValue.arrayRemove([userId])
+      });
+    }
+  }
+  // --- FIM DAS FUNÇÕES DA AGENDA ---
   
   Stream<List<NexoHub>> getHubsForCurrentUser() {
     final user = FirebaseAuth.instance.currentUser;
@@ -208,17 +234,17 @@ class NexoHubService {
     required String hubId,
     required String title,
     required String ownerId,
-    String? initialContentJson, // Adicionado para compartilhar
+    String? initialContentJson,
   }) async {
     final newDocRef = _firestore.collection('hubs').doc(hubId).collection('documents').doc();
     final newDoc = NexoPadDocument(
       id: newDocRef.id,
       title: title,
       ownerId: ownerId,
-      contentJson: initialContentJson ?? '[{"insert":"\\n"}]', // Usa o conteúdo inicial ou um doc em branco
+      contentJson: initialContentJson ?? '[{"insert":"\\n"}]',
       createdAt: Timestamp.now(),
       lastEdited: Timestamp.now(),
-      hubId: hubId, // <<< CORREÇÃO DO BUG ORIGINAL
+      hubId: hubId,
     );
     await newDocRef.set(newDoc.toMap());
     return newDoc;
@@ -236,7 +262,6 @@ class NexoHubService {
     });
   }
 
-  // --- NOVA FUNÇÃO ADICIONADA ---
   Future<void> deleteSharedDocument(String hubId, String docId) async {
     await _firestore.collection('hubs').doc(hubId).collection('documents').doc(docId).delete();
   }
