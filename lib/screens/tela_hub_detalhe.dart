@@ -6,6 +6,7 @@ import 'package:nexo/services/chat_service.dart';
 import 'package:nexo/services/nexo_hub_service.dart';
 import 'package:nexo/screens/tela_chat_mensagens.dart';
 import 'package:nexo/services/profile_service.dart';
+import 'package:nexo/widgets/forum_widget.dart'; // <<< WIDGET DO FÓRUM IMPORTADO
 import 'package:nexo/widgets/user_avatar.dart';
 import 'package:nexo/services/firestore_service.dart';
 import 'package:nexo/services/quiz_service.dart';
@@ -18,7 +19,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum Audience { hub, followers } 
 
-// --- TELA PRINCIPAL DO HUB (PAI COM O TABCONTROLLER) ---
 class TelaHubDetalhe extends StatefulWidget {
   final NexoHub hub;
   const TelaHubDetalhe({super.key, required this.hub});
@@ -31,12 +31,14 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
   late TabController _tabController;
   final String _currentUserId = FirebaseAuth.instance.currentUser!.uid;
   late UserModel _currentUserProfile;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance; // Instância do Firestore
 
   @override
   void initState() {
     super.initState();
     _currentUserProfile = Provider.of<UserModel?>(context, listen: false)!;
-    _tabController = TabController(length: 7, vsync: this);
+    // --- ATUALIZADO PARA 8 ABAS ---
+    _tabController = TabController(length: 8, vsync: this);
     _tabController.addListener(() {
       setState(() {}); 
     });
@@ -48,7 +50,6 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
     super.dispose();
   }
 
-  // Lógica do FAB Inteligente
   Widget? _buildFloatingActionButton() {
     switch (_tabController.index) {
       case 2: // Aba Agenda
@@ -75,12 +76,13 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
           tooltip: 'Compartilhar Baralho Pessoal',
           child: const Icon(Icons.share),
         );
+      // O FÓRUM (INDEX 7) JÁ TEM SEU PRÓPRIO FAB INTERNO
       default: 
         return null;
     }
   }
 
-  // Diálogo para criar novo evento
+  // (Todas as outras funções de diálogo permanecem as mesmas...)
   void _showCreateEventDialog({HubEvent? eventToEdit}) {
     final isEditing = eventToEdit != null;
     final titleController = TextEditingController(text: isEditing ? eventToEdit.title : '');
@@ -145,20 +147,16 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
                       if (isEditing) {
                         await hubService.updateEventInHub(widget.hub.id, eventToEdit!.id, titleController.text);
                       } else {
-                        // Salva com a data de hoje (sem hora) para agrupar
                         final now = DateTime.now();
                         final today = DateTime(now.year, now.month, now.day);
                         
-                        // --- INÍCIO DA CORREÇÃO ---
                         await hubService.addEventToHub(
-                          widget.hub.id, // Passado como POSICIONAL
-                          // Argumentos nomeados começam aqui:
+                          widget.hub.id,
                           title: titleController.text,
                           date: today,
                           meetLink: linkController.text.trim().isEmpty ? null : linkController.text.trim(),
                           audience: linkController.text.trim().isEmpty ? null : selectedAudience.name,
                         );
-                        // --- FIM DA CORREÇÃO ---
                       }
                     } catch (e) {
                       if (mounted) {
@@ -178,7 +176,6 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
     );
   }
 
-  // Diálogo para criar novo documento
   void _showCreateSharedDocumentDialog() {
     final titleController = TextEditingController();
     showDialog(
@@ -214,7 +211,6 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
     );
   }
 
-  // Diálogo para compartilhar baralho pessoal
   void _showShareDeckDialog() {
     final firestoreService = context.read<FirestoreService>();
     final hubService = context.read<NexoHubService>();
@@ -266,6 +262,7 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true, 
+          // --- ATUALIZADO PARA 8 ABAS ---
           tabs: const [
             Tab(icon: Icon(Icons.info_outline), text: 'Sobre'),
             Tab(icon: Icon(Icons.people), text: 'Membros'),
@@ -274,11 +271,13 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
             Tab(icon: Icon(Icons.hub_outlined), text: 'Mapa'),
             Tab(icon: Icon(Icons.note_add), text: 'Docs'),
             Tab(icon: Icon(Icons.style), text: 'Baralhos'),
+            Tab(icon: Icon(Icons.forum), text: 'Fórum'), // <<< NOVA ABA ADICIONADA
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
+        // --- ATUALIZADO PARA 8 TELAS ---
         children: [
           _SobreTab(description: widget.hub.description),
           _MembrosTab(hubId: widget.hub.id),
@@ -292,6 +291,12 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
           TelaMapaMental(hubId: widget.hub.id),
           _DocumentosTab(hubId: widget.hub.id),
           _BaralhosTab(hubId: widget.hub.id),
+          // <<< NOVA TELA DE FÓRUM PRIVADO ADICIONADA >>>
+          ForumWidget(
+            // Passamos a coleção específica deste Hub
+            topicsCollection: _firestore.collection('hubs').doc(widget.hub.id).collection('forum_topics'),
+            currentUser: _currentUserProfile,
+          ),
         ],
       ),
       floatingActionButton: _buildFloatingActionButton(),
@@ -409,12 +414,10 @@ class _MembrosTab extends StatelessWidget {
   }
 }
 
-// --- ABA DE DOCUMENTOS ATUALIZADA ---
 class _DocumentosTab extends StatelessWidget {
   final String hubId;
   const _DocumentosTab({required this.hubId});
 
-  // Função helper para confirmar e deletar o documento
   void _deleteHubDocument(BuildContext context, NexoHubService hubService, NexoPadDocument doc) async {
      final bool? confirm = await showDialog(
       context: context,
@@ -456,7 +459,6 @@ class _DocumentosTab extends StatelessWidget {
             return ListTile(
               leading: const Icon(Icons.edit_document),
               title: Text(doc.title),
-              // ADICIONADO: Menu de Opções
               trailing: PopupMenuButton<String>(
                 onSelected: (value) {
                   if (value == 'delete') {
@@ -482,7 +484,6 @@ class _DocumentosTab extends StatelessWidget {
     );
   }
 }
-// --- FIM DA ATUALIZAÇÃO ---
 
 class _BaralhosTab extends StatelessWidget {
   final String hubId;

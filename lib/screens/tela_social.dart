@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:nexo/screens/tela_chats_lista.dart'; 
+import 'package:nexo/screens/tela_forum_global.dart';
 import '../models/models.dart';
 import '../services/nexo_hub_service.dart';
 import '../services/profile_service.dart';
@@ -17,16 +18,19 @@ class TelaSocial extends StatefulWidget {
 
 class _TelaSocialState extends State<TelaSocial> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final ProfileService _profileService = ProfileService();
-  final NexoHubService _hubService = NexoHubService();
+  late final ProfileService _profileService;
+  late final NexoHubService _hubService;
   final _searchController = TextEditingController();
   Future<List<UserModel>>? _searchResultsFuture;
-  final String _currentUserId = FirebaseAuth.instance.currentUser!.uid;
+  late final String _currentUserId;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
+    _profileService = context.read<ProfileService>();
+    _hubService = context.read<NexoHubService>();
+    _currentUserId = FirebaseAuth.instance.currentUser!.uid;
   }
 
   void _searchUsers() {
@@ -59,6 +63,8 @@ class _TelaSocialState extends State<TelaSocial> with SingleTickerProviderStateM
           controller: _tabController,
           isScrollable: true,
           tabs: const [
+            // --- ABAS REORDENADAS ---
+            Tab(text: 'Fórum Global (Nexo Chan)'), // <<< AGORA É A PRIMEIRA
             Tab(text: 'Conversas'),
             Tab(text: 'Procurar'),
             Tab(text: 'Seguidores'),
@@ -72,6 +78,8 @@ class _TelaSocialState extends State<TelaSocial> with SingleTickerProviderStateM
           : TabBarView(
               controller: _tabController,
               children: [
+                // --- TELAS REORDENADAS ---
+                const TelaForumGlobal(), // <<< AGORA É A PRIMEIRA
                 const TelaChatsLista(),
                 _buildSearchTab(currentUserProfile),
                 UserListView(userIds: currentUserProfile.followerIds, currentUserProfile: currentUserProfile),
@@ -128,19 +136,18 @@ class _TelaSocialState extends State<TelaSocial> with SingleTickerProviderStateM
     );
   }
 
-  // ABA DE CONVITES CORRIGIDA
   Widget _buildHubInvitesTab() {
-    return StreamBuilder<List<Map<String, dynamic>>>( // TIPO CORRIGIDO AQUI
+    return StreamBuilder<List<Map<String, dynamic>>>( 
       stream: _hubService.getReceivedHubInvitesStream(_currentUserId),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         if (snapshot.data!.isEmpty) return const Center(child: Text("Nenhum convite de Hub."));
         
-        final invites = snapshot.data!; // 'invites' agora é uma List<Map>
+        final invites = snapshot.data!; 
         return ListView.builder(
           itemCount: invites.length,
           itemBuilder: (context, index) {
-            final inviteData = invites[index]; // cada item é um Map
+            final inviteData = invites[index]; 
             return ListTile(
               leading: const Icon(Icons.group_add),
               title: Text('Convite para o Hub "${inviteData['hubName'] ?? 'Nome Indisponível'}"'),
@@ -150,11 +157,11 @@ class _TelaSocialState extends State<TelaSocial> with SingleTickerProviderStateM
                 children: [
                   TextButton(
                     child: const Text("Aceitar", style: TextStyle(color: Colors.green)),
-                    onPressed: () => _hubService.acceptHubInvite(inviteData['id']), // Acessando o ID do mapa
+                    onPressed: () => _hubService.acceptHubInvite(inviteData['id']),
                   ),
                   TextButton(
                     child: const Text("Recusar", style: TextStyle(color: Colors.red)),
-                    onPressed: () => _hubService.declineHubInvite(inviteData['id']), // Acessando o ID do mapa
+                    onPressed: () => _hubService.declineHubInvite(inviteData['id']),
                   ),
                 ],
               ),

@@ -25,7 +25,7 @@ import 'services/nexo_pad_service.dart';
 import 'screens/tela_criar_post.dart';
 import 'screens/tela_hubs_lista.dart';
 import 'screens/tela_nexo_pad_lista.dart';
-import 'screens/tela_play_lista.dart'; // <<< ARQUIVO NOVO IMPORTADO
+import 'screens/tela_play_lista.dart'; 
 import 'screens/tela_social.dart';
 import 'screens/tela_nexo_pad.dart';
 import 'widgets/user_avatar.dart';
@@ -127,11 +127,10 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
       const TelaNexoPadLista(),
       const TelaSocial(),
       const TelaFeed(),
-      const TelaPlayLista(), // <<< NOVA TELA ADICIONADA AO INDEXEDSTACK
+      const TelaPlayLista(),
     ];
   }
 
-  // (Lógica dos diálogos de Baralho e Hub permanece a mesma...)
   void _mostrarDialogoNovoBaralho({Baralho? baralhoExistente}) {
     final nomeController = TextEditingController(text: baralhoExistente?.nome);
     showDialog(
@@ -279,7 +278,6 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
           );
         }
         return null; 
-      // A ABA PLAY (INDEX 5) E A SOCIAL (INDEX 3) NÃO TÊM FAB
       default: 
         return null;
     }
@@ -349,7 +347,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
       ),
       body: IndexedStack(
         index: _indiceAtual,
-        children: _telas, // Agora com 6 telas
+        children: _telas,
       ),
       floatingActionButton: _buildFloatingActionButton(context, userProfile), 
       bottomNavigationBar: BottomNavigationBar(
@@ -357,13 +355,13 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
         onTap: (indice) => setState(() => _indiceAtual = indice),
         type: BottomNavigationBarType.fixed,
         items: [
-          BottomNavigationBarItem(icon: const Icon(Icons.style), label: 'decks_label'.tr()),
-          BottomNavigationBarItem(icon: const Icon(Icons.group_work), label: 'hubs_label'.tr()),
-          BottomNavigationBarItem(icon: const Icon(Icons.edit_document), label: 'nexopad_label'.tr()),
-          BottomNavigationBarItem(icon: const Icon(Icons.people_alt), label: 'social_label'.tr()),
+          // --- BARRA DE NAVEGAÇÃO ATUALIZADA COM TRADUÇÕES ---
+          BottomNavigationBarItem(icon: const Icon(Icons.style), label: 'card_label'.tr()),
+          BottomNavigationBarItem(icon: const Icon(Icons.group_work), label: 'hub_label'.tr()),
+          BottomNavigationBarItem(icon: const Icon(Icons.edit_document), label: 'pad_label'.tr()),
+          BottomNavigationBarItem(icon: const Icon(Icons.people_alt), label: 'chan_label'.tr()),
           BottomNavigationBarItem(icon: const Icon(Icons.dynamic_feed), label: 'feed_label'.tr()),
-          // --- SEXTA ABA ADICIONADA ---
-          const BottomNavigationBarItem(icon: Icon(Icons.videogame_asset_outlined), label: 'Play'),
+          BottomNavigationBarItem(icon: const Icon(Icons.videogame_asset_outlined), label: 'play_label'.tr()),
         ],
       ),
     );

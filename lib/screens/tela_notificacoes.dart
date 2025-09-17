@@ -21,7 +21,7 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
   late final NotificationService _notificationService;
   late final ChatService _chatService;
   late final FeedService _feedService;
-  bool _didMarkAsRead = false; // Trava para rodar a função só uma vez
+  bool _didMarkAsRead = false; 
 
   @override
   void initState() {
@@ -32,13 +32,13 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
   }
 
   Future<void> _handleNotificationTap(String currentUserId, NotificationModel notification) async {
-    // Esta função agora só precisa se preocupar com a navegação.
-    // A marcação individual ainda ocorre caso o usuário clique antes da marcação em lote terminar.
     if (!notification.isRead) {
       _notificationService.markNotificationAsRead(currentUserId, notification.id);
     }
 
     switch (notification.sourceType) {
+      // --- CASO "CO-NEXO" ADICIONADO ---
+      case 'new_conexo':
       case 'new_follower':
         if (mounted) {
           Navigator.of(context).push(
@@ -84,14 +84,10 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
       return const Scaffold(body: Center(child: Text("Usuário não encontrado.")));
     }
 
-    // --- CORREÇÃO DO SINO VERMELHO ---
-    // Assim que a tela é construída, chama a função de marcar tudo como lido.
-    // A trava _didMarkAsRead impede que isso rode de novo se a tela for reconstruída.
     if (!_didMarkAsRead) {
       _notificationService.markAllNotificationsAsRead(currentUser.id);
       _didMarkAsRead = true;
     }
-    // --- FIM DA CORREÇÃO ---
 
     return Scaffold(
       appBar: AppBar(
@@ -114,7 +110,6 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
             itemBuilder: (context, index) {
               final notification = notifications[index];
               return ListTile(
-                // O ícone agora reflete o estado vindo do Firestore (que será atualizado rapidamente)
                 leading: Icon(
                   notification.isRead ? Icons.notifications_none : Icons.notifications_active,
                   color: notification.isRead ? Colors.grey : Colors.lightBlueAccent,
