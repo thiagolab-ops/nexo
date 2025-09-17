@@ -19,13 +19,19 @@ class NexoHubService {
             fromFirestore: (snapshot, options) => NexoHub.fromFirestore(snapshot),
             toFirestore: (hub, _) => hub.toMap(),
           );
+  
+  CollectionReference<ChatRoom> get _chatRoomsRef =>
+      _firestore.collection('chatRooms').withConverter<ChatRoom>(
+            fromFirestore: (snapshot, options) => ChatRoom.fromFirestore(snapshot),
+            toFirestore: (room, _) => room.toMap(),
+          );
           
   Future<void> createHub({required String name, String? description}) async {
     final userProfile = await ProfileService().getUserProfile(_currentUserId);
     if (userProfile == null) return;
 
     final newHubRef = _hubsRef.doc();
-    final newChatRoomRef = _firestore.collection('chatRooms').doc(newHubRef.id);
+    final newChatRoomRef = _chatRoomsRef.doc(newHubRef.id); // Modificado para usar a ref com converter
 
     final newHub = NexoHub(
       id: newHubRef.id,
@@ -51,7 +57,7 @@ class NexoHubService {
 
     final batch = _firestore.batch();
     batch.set(newHubRef, newHub);
-    batch.set(newChatRoomRef.withConverter(fromFirestore: (s, o) => ChatRoom.fromFirestore(s), toFirestore: (ChatRoom cr, _) => cr.toMap()), newChatRoom);
+    batch.set(newChatRoomRef, newChatRoom); // Modificado para setar o objeto ChatRoom
     await batch.commit();
   }
 
@@ -99,7 +105,7 @@ class NexoHubService {
       creatorUsername: userProfile.username,
       meetLink: meetLink,
       audience: audience,
-      attendees: [], // Começa com lista vazia
+      attendees: [], 
     );
     await _hubsRef.doc(hubId).collection('events').add(newEvent.toMap());
   }
@@ -112,7 +118,6 @@ class NexoHubService {
     await _hubsRef.doc(hubId).collection('events').doc(eventId).delete();
   }
 
-  // <<< NOVA FUNÇÃO DE RSVP ADICIONADA >>>
   Future<void> rsvpToEvent({
     required String hubId,
     required String eventId,
@@ -122,19 +127,41 @@ class NexoHubService {
     final eventRef = _hubsRef.doc(hubId).collection('events').doc(eventId);
 
     if (isAttending) {
-      // Adiciona o usuário à lista (sem duplicatas)
       await eventRef.update({
         'attendees': FieldValue.arrayUnion([userId])
       });
     } else {
-      // Remove o usuário da lista
       await eventRef.update({
         'attendees': FieldValue.arrayRemove([userId])
       });
     }
   }
-  // --- FIM DAS FUNÇÕES DA AGENDA ---
   
+  // --- FIM FUNÇÕES AGENDA ---
+  
+  // --- NOVA FUNÇÃO DE DELETAR HUB ---
+  Future<void> deleteHub(String hubId, String ownerId) async {
+    // Verificação de segurança do lado do cliente (a regra do Firestore é a final)
+    if (_currentUserId != ownerId) {
+      throw Exception('Apenas o dono pode deletar um hub.');
+    }
+
+    // Deleta o Hub e a Sala de Chat principal atomicamente
+    final batch = _firestore.batch();
+    final hubRef = _hubsRef.doc(hubId);
+    final chatRef = _chatRoomsRef.doc(hubId); // Usando a ref com converter
+    
+    batch.delete(hubRef);
+    batch.delete(chatRef);
+    
+    await batch.commit();
+    
+    // NOTA: Isso NÃO deleta subcoleções (como docs, decks, eventos, quizzes, mensagens).
+    // Isso requer uma Cloud Function "recursive delete", que é um item para a Fase 7 (Manutenção).
+    // Por agora, isso remove o Hub da lista e resolve o bug do chat órfão.
+  }
+  // --- FIM DA NOVA FUNÇÃO ---
+
   Stream<List<NexoHub>> getHubsForCurrentUser() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return Stream.value([]);

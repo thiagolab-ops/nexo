@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:nexo/screens/tela_chat_mensagens.dart';
 import 'package:nexo/screens/tela_comentarios.dart';
+import 'package:nexo/screens/tela_perfil_usuario.dart';
 import 'package:nexo/services/chat_service.dart';
 import 'package:nexo/services/feed_service.dart';
 import 'package:nexo/services/notification_service.dart';
@@ -17,16 +18,35 @@ class TelaNotificacoes extends StatefulWidget {
 }
 
 class _TelaNotificacoesState extends State<TelaNotificacoes> {
-  final NotificationService _notificationService = NotificationService();
-  final ChatService _chatService = ChatService();
-  final FeedService _feedService = FeedService();
+  late final NotificationService _notificationService;
+  late final ChatService _chatService;
+  late final FeedService _feedService;
+  bool _didMarkAsRead = false; // Trava para rodar a função só uma vez
+
+  @override
+  void initState() {
+    super.initState();
+    _notificationService = context.read<NotificationService>();
+    _chatService = context.read<ChatService>();
+    _feedService = context.read<FeedService>();
+  }
 
   Future<void> _handleNotificationTap(String currentUserId, NotificationModel notification) async {
-    // Marcar como lida
-    _notificationService.markNotificationAsRead(currentUserId, notification.id);
+    // Esta função agora só precisa se preocupar com a navegação.
+    // A marcação individual ainda ocorre caso o usuário clique antes da marcação em lote terminar.
+    if (!notification.isRead) {
+      _notificationService.markNotificationAsRead(currentUserId, notification.id);
+    }
 
-    // Navegar
     switch (notification.sourceType) {
+      case 'new_follower':
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (context) => TelaPerfilUsuario(userId: notification.sourceId)),
+          );
+        }
+        break;
+
       case 'new_dm':
         final chatRoom = await _chatService.getChatRoomById(notification.sourceId);
         if (chatRoom != null && mounted) {
@@ -35,7 +55,9 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
           );
         }
         break;
+      
       case 'new_comment':
+      case 'new_like':
         final post = await _feedService.getPostById(notification.sourceId);
         if (post != null && mounted) {
           Navigator.of(context).push(
@@ -43,6 +65,7 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
           );
         }
         break;
+        
       case 'aula_convocada':
         if (notification.meetLink != null && notification.meetLink!.isNotEmpty) {
           final uri = Uri.tryParse(notification.meetLink!);
@@ -60,6 +83,15 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
     if (currentUser == null) {
       return const Scaffold(body: Center(child: Text("Usuário não encontrado.")));
     }
+
+    // --- CORREÇÃO DO SINO VERMELHO ---
+    // Assim que a tela é construída, chama a função de marcar tudo como lido.
+    // A trava _didMarkAsRead impede que isso rode de novo se a tela for reconstruída.
+    if (!_didMarkAsRead) {
+      _notificationService.markAllNotificationsAsRead(currentUser.id);
+      _didMarkAsRead = true;
+    }
+    // --- FIM DA CORREÇÃO ---
 
     return Scaffold(
       appBar: AppBar(
@@ -82,6 +114,7 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
             itemBuilder: (context, index) {
               final notification = notifications[index];
               return ListTile(
+                // O ícone agora reflete o estado vindo do Firestore (que será atualizado rapidamente)
                 leading: Icon(
                   notification.isRead ? Icons.notifications_none : Icons.notifications_active,
                   color: notification.isRead ? Colors.grey : Colors.lightBlueAccent,

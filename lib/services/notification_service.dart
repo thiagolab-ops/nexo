@@ -4,7 +4,6 @@ import '../models/models.dart';
 class NotificationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Método CORRIGIDO para retornar o tipo de dado que a tela espera
   Stream<List<NotificationModel>> getNotificationsStream(String userId) {
     return _firestore
         .collection('users')
@@ -14,13 +13,11 @@ class NotificationService {
         .snapshots()
         .map((snapshot) {
       return snapshot.docs.map((doc) {
-        // Explicitamente convertendo o dado para o nosso modelo
         return NotificationModel.fromFirestore(doc);
       }).toList();
     });
   }
 
-  /// Retorna um Stream com a contagem de notificações não lidas para um usuário.
   Stream<int> getUnreadNotificationCountStream(String userId) {
     return _firestore
         .collection('users')
@@ -31,7 +28,6 @@ class NotificationService {
         .map((snapshot) => snapshot.docs.length);
   }
 
-  // Método FALTANTE que agora está sendo adicionado
   Future<void> markNotificationAsRead(String userId, String notificationId) async {
     await _firestore
         .collection('users')
@@ -39,5 +35,29 @@ class NotificationService {
         .collection('notifications')
         .doc(notificationId)
         .update({'isRead': true});
+  }
+
+  // --- NOVA FUNÇÃO ADICIONADA ---
+  Future<void> markAllNotificationsAsRead(String userId) async {
+    // 1. Encontra todos os documentos não lidos
+    final querySnapshot = await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('notifications')
+        .where('isRead', isEqualTo: false)
+        .get();
+
+    if (querySnapshot.docs.isEmpty) {
+      return; // Nada para marcar
+    }
+
+    // 2. Cria uma operação em lote (batch) para eficiência
+    final batch = _firestore.batch();
+    for (final doc in querySnapshot.docs) {
+      batch.update(doc.reference, {'isRead': true});
+    }
+    
+    // 3. Executa todas as atualizações de uma vez
+    await batch.commit();
   }
 }

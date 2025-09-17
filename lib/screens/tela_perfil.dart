@@ -3,12 +3,24 @@ import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:nexo/screens/tela_dashboard_professor.dart';
-import 'package:nexo/screens/tela_moderacao.dart'; // Importando a nova tela
+import 'package:nexo/screens/tela_moderacao.dart';
+import 'package:nexo/screens/tela_politica.dart'; // <<< ADICIONADO
+import 'package:nexo/screens/tela_termos.dart'; // <<< ADICIONADO
 import '../models/models.dart';
 import '../services/profile_service.dart';
 import '../utils.dart';
 import '../widgets/user_avatar.dart';
 import 'tela_gerenciar_bloqueios.dart';
+import 'package:provider/provider.dart';
+
+// --- CLASSE PARA O SELETOR DE IDIOMA ---
+class Language {
+  final Locale locale;
+  final String name;
+  final String flag;
+  Language(this.locale, this.name, this.flag);
+}
+// --- FIM DA CLASSE ---
 
 class TelaPerfil extends StatefulWidget {
   final String userId;
@@ -18,15 +30,8 @@ class TelaPerfil extends StatefulWidget {
   State<TelaPerfil> createState() => _TelaPerfilState();
 }
 
-class Language {
-  final Locale locale;
-  final String name;
-  final String flag;
-  Language(this.locale, this.name, this.flag);
-}
-
 class _TelaPerfilState extends State<TelaPerfil> {
-  final ProfileService _profileService = ProfileService();
+  late final ProfileService _profileService;
   final _formKey = GlobalKey<FormState>();
   
   late TextEditingController _usernameController;
@@ -37,14 +42,16 @@ class _TelaPerfilState extends State<TelaPerfil> {
   bool _isSaving = false;
   bool _isUploading = false;
   
+  // --- LISTA DE IDIOMAS SUPORTADOS (APENAS OS QUE TEMOS ARQUIVOS .json) ---
   final List<Language> supportedLanguages = [
     Language(const Locale('pt'), 'Português', '🇧🇷'),
     Language(const Locale('en'), 'English', '🇺🇸'),
   ];
-  
+
   @override
   void initState() {
     super.initState();
+    _profileService = context.read<ProfileService>();
     _usernameController = TextEditingController();
     _bioController = TextEditingController();
     _interestsController = TextEditingController();
@@ -134,13 +141,19 @@ class _TelaPerfilState extends State<TelaPerfil> {
         }
         final userProfile = snapshot.data!;
         
-        // This ensures text fields are populated only once
         if (_originalUsername.isEmpty) {
           _usernameController.text = userProfile.username;
           _bioController.text = userProfile.bio;
           _interestsController.text = userProfile.interests.join(', ');
           _originalUsername = userProfile.username;
         }
+
+        // Encontra o idioma atual para o dropdown
+        final currentLocale = context.locale;
+        final currentLang = supportedLanguages.firstWhere(
+          (lang) => lang.locale == currentLocale, 
+          orElse: () => supportedLanguages.first,
+        );
 
         return Scaffold(
           appBar: AppBar(title: Text('editProfileTitle'.tr())),
@@ -177,7 +190,6 @@ class _TelaPerfilState extends State<TelaPerfil> {
                     ),
                     const SizedBox(height: 24),
                     
-                    // BOTÕES DE AÇÃO DO PROFESSOR
                     if (userProfile.role == 'professor') ...[
                       ListTile(
                         leading: const Icon(Icons.dashboard_outlined),
@@ -189,7 +201,6 @@ class _TelaPerfilState extends State<TelaPerfil> {
                           ));
                         },
                       ),
-                      // NOVO BOTÃO DE MODERAÇÃO
                       ListTile(
                         leading: const Icon(Icons.security),
                         title: const Text('Moderação de Conteúdo'),
@@ -235,12 +246,55 @@ class _TelaPerfilState extends State<TelaPerfil> {
                         onPressed: _salvarAlteracoes,
                       ),
                     const Divider(height: 48),
+
+                    // --- SELETOR DE IDIOMA ADICIONADO ---
+                    DropdownButtonFormField<Language>(
+                      value: currentLang,
+                      decoration: const InputDecoration(
+                        labelText: 'Idioma do Aplicativo',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: supportedLanguages.map((Language lang) {
+                        return DropdownMenuItem<Language>(
+                          value: lang,
+                          child: Text('${lang.flag} ${lang.name}'),
+                        );
+                      }).toList(),
+                      onChanged: (Language? lang) {
+                        if (lang != null) {
+                          context.setLocale(lang.locale);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    // --- FIM DO SELETOR DE IDIOMA ---
+
                     ListTile(
                       leading: const Icon(Icons.block),
                       title: Text('manageBlockedUsers'.tr()),
                       onTap: () {
                         Navigator.of(context).push(MaterialPageRoute(
                           builder: (context) => const TelaGerenciarBloqueios(),
+                        ));
+                      },
+                    ),
+
+                    // --- LINKS LEGAIS ADICIONADOS ---
+                     ListTile(
+                      leading: const Icon(Icons.gavel_outlined),
+                      title: const Text('Termos e Condições'),
+                      onTap: () {
+                        Navigator.of(context).push(MaterialPageRoute(
+                          builder: (context) => const TelaTermos(),
+                        ));
+                      },
+                    ),
+                     ListTile(
+                      leading: const Icon(Icons.policy_outlined),
+                      title: const Text('Política de Uso e Abuso'),
+                      onTap: () {
+                        Navigator.of(context).push(MaterialPageRoute(
+                          builder: (context) => const TelaPolitica(),
                         ));
                       },
                     ),

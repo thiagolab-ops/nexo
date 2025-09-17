@@ -9,6 +9,7 @@ import 'package:nexo/screens/tela_perfil.dart';
 import 'package:nexo/services/chat_service.dart';
 import 'package:nexo/services/feed_service.dart';
 import 'package:nexo/services/firestore_service.dart';
+import 'package:nexo/services/mind_map_service.dart';
 import 'package:nexo/services/nexo_hub_service.dart';
 import 'package:nexo/services/notification_service.dart';
 import 'package:nexo/services/quiz_service.dart';
@@ -68,6 +69,7 @@ class MyApp extends StatelessWidget {
               Provider<FeedService>(create: (_) => FeedService()),
               Provider<QuizService>(create: (_) => QuizService()),
               Provider<ReportService>(create: (_) => ReportService()),
+              Provider<MindMapService>(create: (_) => MindMapService()),
               
               if (user != null)
                 StreamProvider<UserModel?>.value(
@@ -113,14 +115,22 @@ class TelaPrincipal extends StatefulWidget {
 class _TelaPrincipalState extends State<TelaPrincipal> {
   int _indiceAtual = 0;
   
-  final List<Widget> _telas = [
-    const TelaBaralhosLista(),
-    const TelaHubsLista(),
-    const TelaNexoPadLista(),
-    const TelaSocial(),
-    const TelaFeed(),
-  ];
+  // As telas são criadas no initState para passar a função de callback
+  late final List<Widget> _telas;
 
+  @override
+  void initState() {
+    super.initState();
+    _telas = [
+      TelaBaralhosLista(showNewDeckDialog: _mostrarDialogoNovoBaralho), 
+      const TelaHubsLista(), // Esta tela agora é mais simples
+      const TelaNexoPadLista(),
+      const TelaSocial(),
+      const TelaFeed(),
+    ];
+  }
+
+  // A lógica do diálogo mora aqui no pai (TelaPrincipal)
   void _mostrarDialogoNovoBaralho({Baralho? baralhoExistente}) {
     final nomeController = TextEditingController(text: baralhoExistente?.nome);
     showDialog(
@@ -161,6 +171,70 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
     );
   }
 
+  // --- LÓGICA DE CRIAR HUB MOVIDA PARA CÁ ---
+  void _showCreateHubDialog() {
+    final nameController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        // Usamos o context.read do Provider que já está acima no widget tree
+        final hubService = context.read<NexoHubService>();
+        
+        return AlertDialog(
+          title: const Text('Criar Novo Hub'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameController,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: 'Nome do Hub'),
+                  validator: (value) =>
+                      value!.trim().isEmpty ? 'O nome é obrigatório.' : null,
+                ),
+                TextFormField(
+                  controller: descriptionController,
+                  decoration: const InputDecoration(labelText: 'Descrição (Opcional)'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (formKey.currentState!.validate()) {
+                  await hubService.createHub(
+                    name: nameController.text.trim(),
+                    description: descriptionController.text.trim(),
+                  );
+                  if (mounted) {
+                    Navigator.of(dialogContext).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Hub criado com sucesso!'), backgroundColor: Colors.green),
+                    );
+                  }
+                }
+              },
+              child: const Text('Criar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+  // --- FIM DA LÓGICA MOVIDA ---
+
+
+  // O FAB "Inteligente" que decide qual botão mostrar (ou nenhum)
   Widget? _buildFloatingActionButton(BuildContext context, UserModel userProfile) {
     switch (_indiceAtual) {
       case 0: // Aba Baralhos
@@ -170,6 +244,17 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
           tooltip: 'addDeckTooltip'.tr(),
           child: const Icon(Icons.add),
         );
+        
+      // --- CASE 1 ADICIONADO ---
+      case 1: // Aba Hubs
+        return FloatingActionButton(
+          heroTag: 'add_hub',
+          onPressed: _showCreateHubDialog, // Chama a função que agora mora aqui
+          tooltip: 'Criar Hub',
+          child: const Icon(Icons.add),
+        );
+      // --- FIM DA ADIÇÃO ---
+
       case 2: // Aba Nexo Pad
         return FloatingActionButton(
           heroTag: 'add_document',
@@ -185,7 +270,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
           tooltip: 'Novo Documento',
           child: const Icon(Icons.add),
         );
-      case 4: // Aba Feed
+      case 4: // Aba Feed (só para professores)
         if (userProfile.role == 'professor') {
           return FloatingActionButton(
             heroTag: 'add_post',
@@ -200,7 +285,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
           );
         }
         return null; 
-      default:
+      default: // Nenhuma outra aba tem FAB
         return null;
     }
   }
@@ -271,7 +356,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
         index: _indiceAtual,
         children: _telas,
       ),
-      floatingActionButton: _buildFloatingActionButton(context, userProfile),
+      floatingActionButton: _buildFloatingActionButton(context, userProfile), // FAB inteligente
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _indiceAtual,
         onTap: (indice) => setState(() => _indiceAtual = indice),

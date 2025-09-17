@@ -7,54 +7,31 @@ import 'package:nexo/screens/tela_jogo.dart';
 import 'package:nexo/services/firestore_service.dart';
 import 'package:nexo/services/nexo_hub_service.dart';
 import 'package:nexo/widgets/baralho_card_widget.dart';
+import 'package:provider/provider.dart';
 
 class TelaBaralhosLista extends StatefulWidget {
-  const TelaBaralhosLista({super.key});
+  // <<< ESTE É O PARÂMETRO QUE ESTAVA FALTANDO NA DEFINIÇÃO DO ARQUIVO >>>
+  final Function({Baralho? baralhoExistente}) showNewDeckDialog;
+  
+  const TelaBaralhosLista({
+    super.key,
+    required this.showNewDeckDialog,
+  });
+
   @override
   _TelaBaralhosListaState createState() => _TelaBaralhosListaState();
 }
 
 class _TelaBaralhosListaState extends State<TelaBaralhosLista> {
-  final FirestoreService _firestoreService = FirestoreService();
-  final NexoHubService _hubService = NexoHubService();
+  late final FirestoreService _firestoreService;
+  late final NexoHubService _hubService;
   final String _userId = FirebaseAuth.instance.currentUser!.uid;
 
-  void _mostrarDialogoNovoBaralho({Baralho? baralhoExistente}) {
-    final nomeController = TextEditingController(text: baralhoExistente?.nome);
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(baralhoExistente == null ? 'newDeckDialogTitle'.tr() : 'Editar Nome'),
-          content: TextField(
-            controller: nomeController,
-            autofocus: true,
-            decoration: InputDecoration(hintText: 'newDeckDialogHint'.tr()),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text('cancelButton'.tr()),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final nome = nomeController.text.trim();
-                if (nome.isNotEmpty) {
-                  if (baralhoExistente != null) {
-                    await _firestoreService.updateBaralho(_userId, baralhoExistente.id!, nome);
-                  } else {
-                    final novoBaralho = Baralho(nome: nome);
-                    await _firestoreService.addBaralho(novoBaralho, _userId);
-                  }
-                  if (mounted) Navigator.of(context).pop();
-                }
-              },
-              child: Text(baralhoExistente == null ? 'addButton'.tr() : 'saveButton'.tr()),
-            ),
-          ],
-        );
-      },
-    );
+  @override
+  void initState() {
+    super.initState();
+    _firestoreService = context.read<FirestoreService>();
+    _hubService = context.read<NexoHubService>();
   }
 
   void _excluirBaralho(Baralho baralho) async {
@@ -161,19 +138,13 @@ class _TelaBaralhosListaState extends State<TelaBaralhosLista> {
                     Navigator.of(context).push(MaterialPageRoute(builder: (context) => TelaJogo(cartoesDoBaralho: cards)));
                   }
                 },
-                onEdit: () => _mostrarDialogoNovoBaralho(baralhoExistente: baralho),
+                onEdit: () => widget.showNewDeckDialog(baralhoExistente: baralho),
                 onDelete: () => _excluirBaralho(baralho),
                 onShare: () => _showShareDeckDialog(baralho),
               );
             },
           );
         },
-      ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'fab_baralhos',
-        onPressed: () => _mostrarDialogoNovoBaralho(),
-        tooltip: 'addDeckTooltip'.tr(),
-        child: const Icon(Icons.add),
       ),
     );
   }

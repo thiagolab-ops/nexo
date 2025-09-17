@@ -1,7 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:nexo/services/profile_service.dart';
+import 'package:nexo/services/report_service.dart'; // <<< ADICIONADO
+import 'package:nexo/utils.dart'; // <<< ADICIONADO
 import 'package:nexo/widgets/user_avatar.dart';
+import 'package:provider/provider.dart'; // <<< ADICIONADO
 import '../models/models.dart';
 import '../services/chat_service.dart';
 
@@ -16,15 +20,20 @@ class TelaChatMensagens extends StatefulWidget {
 class _TelaChatMensagensState extends State<TelaChatMensagens> {
   final ChatService _chatService = ChatService();
   final ProfileService _profileService = ProfileService();
+  final ReportService _reportService = ReportService(); // <<< ADICIONADO
   final _messageController = TextEditingController();
   final String _currentUserId = FirebaseAuth.instance.currentUser!.uid;
   
   Map<String, UserModel> _memberProfiles = {};
+  String _otherUserId = ''; // Armazena o ID do outro usuário em um DM
 
   @override
   void initState() {
     super.initState();
     _fetchMemberProfiles();
+    if (widget.chatRoom.type == ChatRoomType.dm) {
+      _otherUserId = widget.chatRoom.memberIds.firstWhere((id) => id != _currentUserId, orElse: () => '');
+    }
   }
 
   Future<void> _fetchMemberProfiles() async {
@@ -39,7 +48,6 @@ class _TelaChatMensagensState extends State<TelaChatMensagens> {
 
   void _sendMessage() {
     if (_messageController.text.trim().isNotEmpty) {
-      // CORRIGIDO: Usando parâmetros nomeados
       _chatService.sendMessage(
         roomId: widget.chatRoom.id,
         text: _messageController.text,
@@ -49,12 +57,95 @@ class _TelaChatMensagensState extends State<TelaChatMensagens> {
     }
   }
 
+  // --- FUNÇÃO DE DENÚNCIA ADICIONADA ---
+  void _showReportDialog() {
+    final reportController = TextEditingController();
+    final reportOptions = ['Assédio', 'Discurso de Ódio', 'Spam', 'Outro'];
+    String? selectedReason;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Denunciar Usuário'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: selectedReason,
+                    hint: const Text('Selecione um motivo'),
+                    onChanged: (value) {
+                      setDialogState(() => selectedReason = value);
+                    },
+                    items: reportOptions.map((reason) {
+                      return DropdownMenuItem(value: reason, child: Text(reason));
+                    }).toList(),
+                  ),
+                  if (selectedReason == 'Outro')
+                    TextField(
+                      controller: reportController,
+                      decoration: const InputDecoration(labelText: 'Descreva o motivo'),
+                      maxLines: 3,
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: (selectedReason != null)
+                      ? () async {
+                          final reason = (selectedReason == 'Outro')
+                              ? reportController.text.trim()
+                              : selectedReason!;
+                          
+                          if (reason.isEmpty) return;
+
+                          final report = ReportModel(
+                            id: '', // será gerado
+                            reporterId: _currentUserId,
+                            reportedUserId: _otherUserId, // Denuncia o outro usuário no DM
+                            contentId: widget.chatRoom.id, // Envia o ID do chat para análise
+                            contentType: 'chat_dm',
+                            reason: reason,
+                            createdAt: Timestamp.now(),
+                          );
+                          
+                          try {
+                            await _reportService.submitReport(report);
+                            if (mounted) {
+                              Navigator.of(context).pop();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Denúncia enviada com sucesso.'), backgroundColor: Colors.green),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              Navigator.of(context).pop();
+                              showErrorDialog(context, 'Erro', e.toString());
+                            }
+                          }
+                        }
+                      : null,
+                  child: const Text('Enviar Denúncia'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     String chatTitle = 'Chat';
     if (widget.chatRoom.type == ChatRoomType.dm) {
-      final otherUserId = widget.chatRoom.memberIds.firstWhere((id) => id != _currentUserId, orElse: () => '');
-      chatTitle = _memberProfiles[otherUserId]?.username ?? 'Mensagem Direta';
+      chatTitle = _memberProfiles[_otherUserId]?.username ?? 'Carregando...';
     } else {
       chatTitle = widget.chatRoom.memberInfo['hubName'] ?? 'Chat do Hub';
     }
@@ -62,6 +153,15 @@ class _TelaChatMensagensState extends State<TelaChatMensagens> {
     return Scaffold(
       appBar: AppBar(
         title: Text(chatTitle),
+        // --- BOTÃO DE DENÚNCIA ADICIONADO ---
+        actions: [
+          if (widget.chatRoom.type == ChatRoomType.dm) // Só mostra em DMs
+            IconButton(
+              icon: const Icon(Icons.report_problem_outlined, color: Colors.yellowAccent),
+              tooltip: 'Denunciar Conversa',
+              onPressed: _showReportDialog,
+            ),
+        ],
       ),
       body: Column(
         children: [

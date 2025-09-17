@@ -56,7 +56,7 @@ service cloud.firestore {
       allow get, list: if request.auth != null;
       allow create: if request.auth != null;
       allow update: if request.auth.uid in isMemberOfHub(hubId);
-      allow delete: if request.auth.uid == resource.data.ownerId;
+      allow delete: if request.auth.uid == resource.data.ownerId; // Esta regra está correta
 
       match /{document=**} { 
         allow read, write: if request.auth.uid in isMemberOfHub(hubId); 
@@ -66,6 +66,10 @@ service cloud.firestore {
     match /chatRooms/{roomId} {
       allow read, list: if request.auth.uid in resource.data.memberIds;
       allow update, create: if request.auth.uid in request.resource.data.memberIds;
+      
+      // --- ESTA É A LINHA DA CORREÇÃO ---
+      // Permite deletar o chat SE o usuário for o dono do Hub correspondente (que tem o mesmo ID)
+      allow delete: if request.auth.uid == get(/databases/$(database)/documents/hubs/$(roomId)).data.ownerId;
 
       match /messages/{messageId} {
         allow read, create: if request.auth.uid in get(/databases/$(database)/documents/chatRooms/$(roomId)).data.memberIds;
