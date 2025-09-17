@@ -25,6 +25,7 @@ import 'services/nexo_pad_service.dart';
 import 'screens/tela_criar_post.dart';
 import 'screens/tela_hubs_lista.dart';
 import 'screens/tela_nexo_pad_lista.dart';
+import 'screens/tela_play_lista.dart'; // <<< ARQUIVO NOVO IMPORTADO
 import 'screens/tela_social.dart';
 import 'screens/tela_nexo_pad.dart';
 import 'widgets/user_avatar.dart';
@@ -115,7 +116,6 @@ class TelaPrincipal extends StatefulWidget {
 class _TelaPrincipalState extends State<TelaPrincipal> {
   int _indiceAtual = 0;
   
-  // As telas são criadas no initState para passar a função de callback
   late final List<Widget> _telas;
 
   @override
@@ -123,14 +123,15 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
     super.initState();
     _telas = [
       TelaBaralhosLista(showNewDeckDialog: _mostrarDialogoNovoBaralho), 
-      const TelaHubsLista(), // Esta tela agora é mais simples
+      const TelaHubsLista(),
       const TelaNexoPadLista(),
       const TelaSocial(),
       const TelaFeed(),
+      const TelaPlayLista(), // <<< NOVA TELA ADICIONADA AO INDEXEDSTACK
     ];
   }
 
-  // A lógica do diálogo mora aqui no pai (TelaPrincipal)
+  // (Lógica dos diálogos de Baralho e Hub permanece a mesma...)
   void _mostrarDialogoNovoBaralho({Baralho? baralhoExistente}) {
     final nomeController = TextEditingController(text: baralhoExistente?.nome);
     showDialog(
@@ -171,7 +172,6 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
     );
   }
 
-  // --- LÓGICA DE CRIAR HUB MOVIDA PARA CÁ ---
   void _showCreateHubDialog() {
     final nameController = TextEditingController();
     final descriptionController = TextEditingController();
@@ -180,7 +180,6 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
     showDialog(
       context: context,
       builder: (dialogContext) {
-        // Usamos o context.read do Provider que já está acima no widget tree
         final hubService = context.read<NexoHubService>();
         
         return AlertDialog(
@@ -231,10 +230,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
       },
     );
   }
-  // --- FIM DA LÓGICA MOVIDA ---
 
-
-  // O FAB "Inteligente" que decide qual botão mostrar (ou nenhum)
   Widget? _buildFloatingActionButton(BuildContext context, UserModel userProfile) {
     switch (_indiceAtual) {
       case 0: // Aba Baralhos
@@ -245,15 +241,13 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
           child: const Icon(Icons.add),
         );
         
-      // --- CASE 1 ADICIONADO ---
       case 1: // Aba Hubs
         return FloatingActionButton(
           heroTag: 'add_hub',
-          onPressed: _showCreateHubDialog, // Chama a função que agora mora aqui
+          onPressed: _showCreateHubDialog,
           tooltip: 'Criar Hub',
           child: const Icon(Icons.add),
         );
-      // --- FIM DA ADIÇÃO ---
 
       case 2: // Aba Nexo Pad
         return FloatingActionButton(
@@ -285,7 +279,8 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
           );
         }
         return null; 
-      default: // Nenhuma outra aba tem FAB
+      // A ABA PLAY (INDEX 5) E A SOCIAL (INDEX 3) NÃO TÊM FAB
+      default: 
         return null;
     }
   }
@@ -354,9 +349,9 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
       ),
       body: IndexedStack(
         index: _indiceAtual,
-        children: _telas,
+        children: _telas, // Agora com 6 telas
       ),
-      floatingActionButton: _buildFloatingActionButton(context, userProfile), // FAB inteligente
+      floatingActionButton: _buildFloatingActionButton(context, userProfile), 
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _indiceAtual,
         onTap: (indice) => setState(() => _indiceAtual = indice),
@@ -367,6 +362,8 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
           BottomNavigationBarItem(icon: const Icon(Icons.edit_document), label: 'nexopad_label'.tr()),
           BottomNavigationBarItem(icon: const Icon(Icons.people_alt), label: 'social_label'.tr()),
           BottomNavigationBarItem(icon: const Icon(Icons.dynamic_feed), label: 'feed_label'.tr()),
+          // --- SEXTA ABA ADICIONADA ---
+          const BottomNavigationBarItem(icon: Icon(Icons.videogame_asset_outlined), label: 'Play'),
         ],
       ),
     );
