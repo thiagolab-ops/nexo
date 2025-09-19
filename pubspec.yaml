@@ -35,6 +35,9 @@ dependencies:
   timeago: ^3.6.1
   url_launcher: ^6.3.0
   uuid: ^4.3.3
+  shared_preferences: ^2.5.3
+  printing: ^5.13.1
+  pdf: ^3.11.3
 
 dependency_overrides:
   intl: '0.18.1'

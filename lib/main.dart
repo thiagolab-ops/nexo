@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:nexo/nexo_theme.dart'; // <<< ARQUIVO DE TEMA IMPORTADO
 import 'package:nexo/screens/tela_baralhos_lista.dart'; 
 import 'package:nexo/screens/tela_notificacoes.dart';
 import 'package:nexo/screens/tela_perfil.dart';
@@ -14,6 +15,7 @@ import 'package:nexo/services/nexo_hub_service.dart';
 import 'package:nexo/services/notification_service.dart';
 import 'package:nexo/services/quiz_service.dart';
 import 'package:nexo/services/report_service.dart';
+import 'package:nexo/services/theme_provider.dart'; // <<< PROVIDER DE TEMA IMPORTADO
 import 'package:provider/provider.dart';
 import 'package:nexo/screens/tela_feed.dart';
 
@@ -61,6 +63,9 @@ class MyApp extends StatelessWidget {
         builder: (context, user, _) {
           return MultiProvider(
             providers: [
+              // --- PROVIDER DE TEMA ADICIONADO ---
+              ChangeNotifierProvider(create: (_) => ThemeProvider()),
+              
               Provider<ProfileService>(create: (_) => ProfileService()),
               Provider<NotificationService>(create: (_) => NotificationService()),
               Provider<NexoPadService>(create: (_) => NexoPadService()),
@@ -78,26 +83,24 @@ class MyApp extends StatelessWidget {
                   initialData: null,
                 )
             ],
-            child: MaterialApp(
-              localizationsDelegates: context.localizationDelegates,
-              supportedLocales: context.supportedLocales,
-              locale: context.locale,
-              title: 'Nexo',
-              theme: ThemeData.dark().copyWith(
-                scaffoldBackgroundColor: const Color(0xFF121212),
-                primaryColor: Colors.blueAccent,
-                textTheme: GoogleFonts.latoTextTheme(ThemeData.dark().textTheme),
-                appBarTheme: const AppBarTheme(
-                  backgroundColor: Color(0xFF1F1F1F),
-                  elevation: 0,
-                ),
-                floatingActionButtonTheme: const FloatingActionButtonThemeData(
-                  backgroundColor: Colors.lightBlueAccent,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-              home: const AuthGate(),
-              debugShowCheckedModeBanner: false,
+            // --- CONSUMIDOR DE TEMA ADICIONADO ---
+            child: Consumer<ThemeProvider>(
+              builder: (context, themeProvider, child) {
+                return MaterialApp(
+                  localizationsDelegates: context.localizationDelegates,
+                  supportedLocales: context.supportedLocales,
+                  locale: context.locale,
+                  title: 'Nexo',
+                  
+                  // --- TEMAS CONECTADOS ---
+                  theme: NexoTheme.light,       // Nosso novo tema claro
+                  darkTheme: NexoTheme.dark,      // Nosso tema escuro existente
+                  themeMode: themeProvider.themeMode, // O provider decide qual mostrar
+                  
+                  home: const AuthGate(),
+                  debugShowCheckedModeBanner: false,
+                );
+              },
             ),
           );
         },
@@ -105,6 +108,9 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+
+// --- NENHUMA MUDANÇA ABAIXO DAQUI ---
+// (O resto do arquivo permanece o mesmo)
 
 class TelaPrincipal extends StatefulWidget {
   const TelaPrincipal({super.key});
@@ -347,7 +353,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
       ),
       body: IndexedStack(
         index: _indiceAtual,
-        children: _telas,
+        children: _telas, 
       ),
       floatingActionButton: _buildFloatingActionButton(context, userProfile), 
       bottomNavigationBar: BottomNavigationBar(
@@ -355,7 +361,6 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
         onTap: (indice) => setState(() => _indiceAtual = indice),
         type: BottomNavigationBarType.fixed,
         items: [
-          // --- BARRA DE NAVEGAÇÃO ATUALIZADA COM TRADUÇÕES ---
           BottomNavigationBarItem(icon: const Icon(Icons.style), label: 'card_label'.tr()),
           BottomNavigationBarItem(icon: const Icon(Icons.group_work), label: 'hub_label'.tr()),
           BottomNavigationBarItem(icon: const Icon(Icons.edit_document), label: 'pad_label'.tr()),

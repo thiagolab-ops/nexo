@@ -1,8 +1,7 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../models/models.dart';
 
-class BaralhoCardWidget extends StatefulWidget {
+class BaralhoCardWidget extends StatelessWidget {
   final Baralho baralho;
   final VoidCallback onTap;
   final VoidCallback onPlay;
@@ -21,78 +20,74 @@ class BaralhoCardWidget extends StatefulWidget {
   });
 
   @override
-  State<BaralhoCardWidget> createState() => _BaralhoCardWidgetState();
-}
-
-class _BaralhoCardWidgetState extends State<BaralhoCardWidget> {
-  bool _isHovering = false;
-
-  @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovering = true),
-      onExit: (_) => setState(() => _isHovering = false),
-      cursor: SystemMouseCursors.click,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20.0),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
-          child: InkWell(
-            onTap: widget.onTap,
-            borderRadius: BorderRadius.circular(20.0),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20.0),
-                color: _isHovering ? Colors.white.withOpacity(0.25) : Colors.white.withOpacity(0.15),
-                border: Border.all(
-                  color: _isHovering ? Colors.white.withOpacity(0.5) : Colors.white.withOpacity(0.3),
-                  width: 1.5,
-                ),
+    // --- INÍCIO DA CORREÇÃO DE TEMA ---
+    // 1. Verificamos manualmente qual é o tema atual
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    // 2. Criamos estilos de texto explícitos baseados no tema
+    final TextStyle? titleStyle = Theme.of(context).textTheme.titleLarge?.copyWith(
+      color: isDarkMode ? Colors.white : Colors.black87, // Texto branco no escuro, preto no claro
+    );
+    
+    final TextStyle? descriptionStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: isDarkMode ? Colors.grey[400] : Colors.grey[700], // Cores de subtítulo apropriadas
+    );
+    // --- FIM DA CORREÇÃO ---
+
+    return Card(
+      elevation: 4,
+      // A cor do Card (branco no claro, cinza-escuro no escuro) vem do nexo_theme.dart e está correta.
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                baralho.nome,
+                style: titleStyle, // 3. Aplicamos o estilo explícito
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(widget.baralho.nome, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                    
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.share, color: Colors.white70),
-                          tooltip: 'Compartilhar no Hub',
-                          onPressed: widget.onShare,
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.videogame_asset_outlined, color: Colors.white),
-                          tooltip: 'Jogar',
-                          onPressed: widget.onPlay,
-                        ),
-                        PopupMenuButton<String>(
-                          onSelected: (value) {
-                            if (value == 'edit') widget.onEdit();
-                            if (value == 'delete') widget.onDelete();
-                          },
-                          itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                            const PopupMenuItem<String>(
-                              value: 'edit',
-                              child: Text('Editar Nome'),
-                            ),
-                            const PopupMenuItem<String>(
-                              value: 'delete',
-                              child: Text('Excluir Baralho'),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
+              if (baralho.descricao != null && baralho.descricao!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Text(
+                    baralho.descricao!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: descriptionStyle, // 4. Aplicamos o estilo explícito
+                  ),
                 ),
-              ),
-            ),
+              const Spacer(),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.share),
+                    onPressed: onShare,
+                    tooltip: 'Compartilhar no Hub',
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                    onPressed: onDelete,
+                    tooltip: 'Excluir Baralho',
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: onEdit,
+                    tooltip: 'Editar Nome',
+                  ),
+                  ElevatedButton(
+                    onPressed: onPlay,
+                    child: const Icon(Icons.play_arrow),
+                  ),
+                ],
+              )
+            ],
           ),
         ),
       ),

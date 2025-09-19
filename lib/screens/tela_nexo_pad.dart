@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:html' as html; 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,12 @@ import 'package:nexo/services/nexo_hub_service.dart';
 import 'package:nexo/services/nexo_pad_service.dart';
 import 'package:nexo/services/profile_service.dart';
 import 'package:nexo/widgets/calculadora_flutuante.dart';
+
+// Importações de PDF e Impressão
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+
 
 class TelaNexoPad extends StatefulWidget {
   final NexoPadDocument document;
@@ -66,29 +73,23 @@ class _TelaNexoPadState extends State<TelaNexoPad> {
     }
   }
 
-  // --- FUNÇÃO DE SALVAR CORRIGIDA ---
   void _saveDocument() async {
-  
-    // --- INÍCIO DA CORREÇÃO ---
-    // Adiciona uma trava de segurança. Se o perfil do usuário ainda não carregou,
-    // ele exibe um aviso e impede o salvamento (que falharia).
     if (_currentUserProfile == null) {
       if(mounted){
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Perfil de usuário ainda carregando... Tente novamente em 1 segundo.'), backgroundColor: Colors.orangeAccent),
         );
       }
-      return; // ABORTA O SALVAMENTO
+      return; 
     }
-    // --- FIM DA CORREÇÃO ---
 
     final updatedDocument = NexoPadDocument(
       id: widget.document.id,
       title: widget.document.title,
       contentJson: jsonEncode(_controller.document.toDelta().toJson()),
       ownerId: widget.document.ownerId,
-      lastEditorId: _currentUserProfile!.id, // Agora é seguro usar '!'
-      lastEditorUsername: _currentUserProfile!.username, // Agora é seguro usar '!'
+      lastEditorId: _currentUserProfile!.id, 
+      lastEditorUsername: _currentUserProfile!.username,
       createdAt: widget.document.createdAt,
       lastEdited: Timestamp.now(),
       hubId: widget.document.hubId,
@@ -96,10 +97,8 @@ class _TelaNexoPadState extends State<TelaNexoPad> {
     
     try {
       if (widget.document.hubId != null && widget.document.hubId!.isNotEmpty) {
-        // É um documento de Hub
         await _nexoHubService.updateSharedDocument(widget.document.hubId!, updatedDocument);
       } else {
-        // É um documento pessoal
         await _nexoPadService.updateDocument(updatedDocument);
       }
     
@@ -116,7 +115,45 @@ class _TelaNexoPadState extends State<TelaNexoPad> {
       }
     }
   }
-  // --- FIM DA FUNÇÃO SALVAR ---
+
+  // --- FUNÇÃO DE IMPRESSÃO REESCRITA COM GERADOR DE PDF ---
+  Future<void> _printDocument() async {
+    final String plainText = _controller.document.toPlainText();
+    final pdf = pw.Document();
+
+    final font = await PdfGoogleFonts.latoRegular();
+    final titleFont = await PdfGoogleFonts.latoBold();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) {
+          return [
+            pw.Header(
+              level: 0,
+              child: pw.Text(
+                widget.document.title, 
+                style: pw.TextStyle(font: titleFont, fontSize: 24),
+              ),
+            ),
+            pw.Divider(),
+            pw.Paragraph(
+              text: plainText,
+              // --- CORREÇÃO AQUI ---
+              // Trocado 'lineHeight: 1.5' (inválido) por 'lineSpacing: 5.0' (válido)
+              style: pw.TextStyle(font: font, fontSize: 14, lineSpacing: 5.0),
+            ),
+          ];
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+    );
+  }
+  // --- FIM DA FUNÇÃO ---
 
   @override
   Widget build(BuildContext context) {
@@ -124,6 +161,11 @@ class _TelaNexoPadState extends State<TelaNexoPad> {
       appBar: AppBar(
         title: Text(widget.document.title),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.print_outlined),
+            tooltip: 'Imprimir / Salvar como PDF',
+            onPressed: _printDocument,
+          ),
           IconButton(
             icon: const Icon(Icons.calculate_outlined),
             tooltip: 'Calculadora',

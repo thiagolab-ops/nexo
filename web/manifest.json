@@ -1,11 +1,11 @@
 {
-    "name": "nexo",
-    "short_name": "nexo",
+    "name": "Nexo - Rede de Estudos",
+    "short_name": "Nexo",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#121212",
+    "theme_color": "#0D47A1",
+    "description": "Uma rede social de estudos gamificada com flashcards, hubs, mapas mentais e mais.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

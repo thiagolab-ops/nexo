@@ -4,8 +4,10 @@ import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:nexo/screens/tela_dashboard_professor.dart';
 import 'package:nexo/screens/tela_moderacao.dart';
-import 'package:nexo/screens/tela_politica.dart'; // <<< ADICIONADO
-import 'package:nexo/screens/tela_termos.dart'; // <<< ADICIONADO
+import 'package:nexo/screens/tela_nexogo_admin.dart'; // <<< ARQUIVO NOVO IMPORTADO
+import 'package:nexo/screens/tela_politica.dart'; 
+import 'package:nexo/screens/tela_termos.dart'; 
+import 'package:nexo/services/theme_provider.dart'; 
 import '../models/models.dart';
 import '../services/profile_service.dart';
 import '../utils.dart';
@@ -13,14 +15,12 @@ import '../widgets/user_avatar.dart';
 import 'tela_gerenciar_bloqueios.dart';
 import 'package:provider/provider.dart';
 
-// --- CLASSE PARA O SELETOR DE IDIOMA ---
 class Language {
   final Locale locale;
   final String name;
   final String flag;
   Language(this.locale, this.name, this.flag);
 }
-// --- FIM DA CLASSE ---
 
 class TelaPerfil extends StatefulWidget {
   final String userId;
@@ -42,7 +42,6 @@ class _TelaPerfilState extends State<TelaPerfil> {
   bool _isSaving = false;
   bool _isUploading = false;
   
-  // --- LISTA DE IDIOMAS SUPORTADOS (APENAS OS QUE TEMOS ARQUIVOS .json) ---
   final List<Language> supportedLanguages = [
     Language(const Locale('pt'), 'Português', '🇧🇷'),
     Language(const Locale('en'), 'English', '🇺🇸'),
@@ -133,6 +132,14 @@ class _TelaPerfilState extends State<TelaPerfil> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+    final isDarkMode = themeProvider.isDarkMode;
+    final currentLocale = context.locale;
+    final currentLang = supportedLanguages.firstWhere(
+      (lang) => lang.locale == currentLocale, 
+      orElse: () => supportedLanguages.first,
+    );
+
     return StreamBuilder<UserModel?>(
       stream: _profileService.getUserProfileStream(widget.userId),
       builder: (context, snapshot) {
@@ -147,13 +154,6 @@ class _TelaPerfilState extends State<TelaPerfil> {
           _interestsController.text = userProfile.interests.join(', ');
           _originalUsername = userProfile.username;
         }
-
-        // Encontra o idioma atual para o dropdown
-        final currentLocale = context.locale;
-        final currentLang = supportedLanguages.firstWhere(
-          (lang) => lang.locale == currentLocale, 
-          orElse: () => supportedLanguages.first,
-        );
 
         return Scaffold(
           appBar: AppBar(title: Text('editProfileTitle'.tr())),
@@ -211,6 +211,17 @@ class _TelaPerfilState extends State<TelaPerfil> {
                           ));
                         },
                       ),
+                      // --- LINK DO NEXO GO ADICIONADO ---
+                      ListTile(
+                        leading: const Icon(Icons.video_library_outlined),
+                        title: const Text('Meu Nexo Go (Vídeos)'),
+                        trailing: const Icon(Icons.arrow_forward_ios),
+                        onTap: () {
+                          Navigator.of(context).push(MaterialPageRoute(
+                            builder: (context) => const TelaNexoGoAdmin(),
+                          ));
+                        },
+                      ),
                       const Divider(height: 24),
                     ],
 
@@ -247,7 +258,16 @@ class _TelaPerfilState extends State<TelaPerfil> {
                       ),
                     const Divider(height: 48),
 
-                    // --- SELETOR DE IDIOMA ADICIONADO ---
+                    SwitchListTile(
+                      title: const Text('Modo Escuro'),
+                      secondary: Icon(isDarkMode ? Icons.dark_mode_outlined : Icons.light_mode_outlined),
+                      value: isDarkMode,
+                      onChanged: (bool newValue) {
+                        context.read<ThemeProvider>().toggleTheme(newValue);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
                     DropdownButtonFormField<Language>(
                       value: currentLang,
                       decoration: const InputDecoration(
@@ -267,7 +287,6 @@ class _TelaPerfilState extends State<TelaPerfil> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    // --- FIM DO SELETOR DE IDIOMA ---
 
                     ListTile(
                       leading: const Icon(Icons.block),
@@ -279,7 +298,6 @@ class _TelaPerfilState extends State<TelaPerfil> {
                       },
                     ),
 
-                    // --- LINKS LEGAIS ADICIONADOS ---
                      ListTile(
                       leading: const Icon(Icons.gavel_outlined),
                       title: const Text('Termos e Condições'),

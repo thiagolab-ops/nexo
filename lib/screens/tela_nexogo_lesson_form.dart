@@ -1,0 +1,120 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:nexo/models/models.dart';
+import 'package:nexo/services/firestore_service.dart';
+import 'package:provider/provider.dart';
+
+class TelaNexoGoLessonForm extends StatefulWidget {
+  final String cursoId;
+  final String ownerId;
+  final Lesson? lessonToEdit;
+  final int currentLessonCount; // Precisamos disso para saber qual 'orderIndex' usar
+
+  const TelaNexoGoLessonForm({
+    super.key, 
+    required this.cursoId,
+    required this.ownerId,
+    this.lessonToEdit,
+    this.currentLessonCount = 0,
+  });
+
+  @override
+  State<TelaNexoGoLessonForm> createState() => _TelaNexoGoLessonFormState();
+}
+
+class _TelaNexoGoLessonFormState extends State<TelaNexoGoLessonForm> {
+  final _formKey = GlobalKey<FormState>();
+  late final FirestoreService _firestoreService;
+  late TextEditingController _titleController;
+  late TextEditingController _urlController;
+  bool _isLoading = false;
+
+  bool get _isEditing => widget.lessonToEdit != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _firestoreService = context.read<FirestoreService>();
+    _titleController = TextEditingController(text: widget.lessonToEdit?.title ?? '');
+    _urlController = TextEditingController(text: widget.lessonToEdit?.videoUrl ?? '');
+  }
+
+  Future<void> _saveLesson() async {
+    if (!_formKey.currentState!.validate()) return;
+    
+    setState(() => _isLoading = true);
+
+    try {
+      if (_isEditing) {
+        final updatedLesson = widget.lessonToEdit!;
+        updatedLesson.title = _titleController.text;
+        updatedLesson.videoUrl = _urlController.text;
+        
+        await _firestoreService.updateLesson(widget.ownerId, widget.cursoId, updatedLesson);
+      } else {
+        final newLesson = Lesson(
+          id: '', // será gerado
+          title: _titleController.text,
+          videoUrl: _urlController.text,
+          orderIndex: widget.currentLessonCount, // Adiciona ao final da lista
+          createdAt: Timestamp.now(),
+        );
+        await _firestoreService.addLesson(widget.ownerId, widget.cursoId, newLesson);
+      }
+
+      if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(content: Text('Aula salva com sucesso!'), backgroundColor: Colors.green),
+         );
+         Navigator.of(context).pop();
+      }
+    } catch (e) {
+       setState(() => _isLoading = false);
+       if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(content: Text('Erro ao salvar aula: $e'), backgroundColor: Colors.red),
+         );
+       }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_isEditing ? 'Editar Aula' : 'Nova Aula do Curso'),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                controller: _titleController,
+                decoration: const InputDecoration(labelText: 'Título da Aula'),
+                validator: (val) => val!.isEmpty ? 'Campo obrigatório' : null,
+              ),
+              const SizedBox(height: 16),
+               TextFormField(
+                controller: _urlController,
+                decoration: const InputDecoration(labelText: 'URL do Vídeo (YouTube ou Vimeo)'),
+                validator: (val) => val!.isEmpty ? 'URL é obrigatória' : null,
+              ),
+              const SizedBox(height: 32),
+              if (_isLoading)
+                const Center(child: CircularProgressIndicator())
+              else
+                ElevatedButton(
+                  onPressed: _saveLesson,
+                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+                  child: const Text('SALVAR AULA'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

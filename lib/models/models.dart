@@ -197,7 +197,6 @@ class NotificationModel {
   }
 }
 
-// --- HubEvent ATUALIZADO ---
 class HubEvent {
   final String id;
   final String title;
@@ -206,7 +205,7 @@ class HubEvent {
   final String creatorUsername;
   final String? meetLink;
   final String? audience;
-  final List<String> attendees; // <<< ADICIONADO PARA O RSVP
+  final List<String> attendees; 
 
   HubEvent({
     required this.id,
@@ -216,7 +215,7 @@ class HubEvent {
     required this.creatorUsername,
     this.meetLink,
     this.audience,
-    this.attendees = const [], // <<< ADICIONADO
+    this.attendees = const [], 
   });
 
   factory HubEvent.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc, [SnapshotOptions? options]) {
@@ -229,7 +228,7 @@ class HubEvent {
       creatorUsername: data['creatorUsername'] ?? '',
       meetLink: data['meetLink'],
       audience: data['audience'],
-      attendees: List<String>.from(data['attendees'] ?? []), // <<< ADICIONADO
+      attendees: List<String>.from(data['attendees'] ?? []), 
     );
   }
 
@@ -241,11 +240,10 @@ class HubEvent {
       'creatorUsername': creatorUsername,
       'meetLink': meetLink,
       'audience': audience,
-      'attendees': attendees, // <<< ADICIONADO
+      'attendees': attendees, 
     };
   }
 }
-// --- FIM DA ATUALIZAÇÃO ---
 
 class UserModel {
   final String id;
@@ -633,4 +631,160 @@ class AgendaEvent {
   Map<String, dynamic> toMap() { 
     return { 'title': title, 'date': Timestamp.fromDate(date), 'isDone': isDone }; 
   } 
+}
+
+class VideoNexo {
+  String id;
+  final String ownerId;
+  String title;
+  String subject;
+  String description;
+  String videoUrl;
+  final Timestamp createdAt;
+
+  VideoNexo({
+    this.id = '',
+    required this.ownerId,
+    required this.title,
+    required this.subject,
+    required this.description,
+    required this.videoUrl,
+    required this.createdAt,
+  });
+
+  String get thumbnailUrl {
+    if (videoUrl.contains('youtube.com') || videoUrl.contains('youtu.be')) {
+      final regExp = RegExp(
+          r".*(?:(?:youtu\.be\/|v\/|vi\/|u\/\w\/|embed\/|watch\?v=)|(?:youtu\.be\/))([^#\&\?]*).*",
+          caseSensitive: false,
+          multiLine: false);
+      final match = regExp.firstMatch(videoUrl);
+      final videoId = match?.group(1);
+
+      if (videoId != null && videoId.isNotEmpty) {
+        return 'https://img.youtube.com/vi/$videoId/0.jpg';
+      }
+    }
+    return ''; 
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'ownerId': ownerId,
+      'title': title,
+      'subject': subject,
+      'description': description,
+      'videoUrl': videoUrl,
+      'createdAt': createdAt,
+    };
+  }
+
+  factory VideoNexo.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data()!;
+    return VideoNexo(
+      id: doc.id,
+      ownerId: data['ownerId'] ?? '',
+      title: data['title'] ?? '',
+      subject: data['subject'] ?? '',
+      description: data['description'] ?? '',
+      videoUrl: data['videoUrl'] ?? '',
+      createdAt: data['createdAt'] ?? Timestamp.now(),
+    );
+  }
+}
+
+// --- NOVOS MODELOS DE CURSO ADICIONADOS ---
+
+class Curso {
+  final String id;
+  final String ownerId;
+  String title;
+  String description;
+  String thumbnailUrl;
+  final Timestamp createdAt;
+  final List<String> linkedHubIds; // Hubs onde este curso aparece
+  final Map<String, int> ratings; // Mapa de UserID para Nota (1-5)
+
+  Curso({
+    required this.id,
+    required this.ownerId,
+    required this.title,
+    required this.description,
+    this.thumbnailUrl = '',
+    required this.createdAt,
+    this.linkedHubIds = const [],
+    this.ratings = const {},
+  });
+
+  // Helper para calcular a média de avaliação
+  double get averageRating {
+    if (ratings.isEmpty) return 0.0;
+    double sum = 0;
+    ratings.forEach((key, value) {
+      sum += value;
+    });
+    return sum / ratings.length;
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'ownerId': ownerId,
+      'title': title,
+      'description': description,
+      'thumbnailUrl': thumbnailUrl,
+      'createdAt': createdAt,
+      'linkedHubIds': linkedHubIds,
+      'ratings': ratings,
+    };
+  }
+
+  factory Curso.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data()!;
+    return Curso(
+      id: doc.id,
+      ownerId: data['ownerId'] ?? '',
+      title: data['title'] ?? '',
+      description: data['description'] ?? '',
+      thumbnailUrl: data['thumbnailUrl'] ?? '',
+      createdAt: data['createdAt'] ?? Timestamp.now(),
+      linkedHubIds: List<String>.from(data['linkedHubIds'] ?? []),
+      ratings: Map<String, int>.from(data['ratings'] ?? {}),
+    );
+  }
+}
+
+class Lesson {
+  final String id;
+  String title;
+  String videoUrl;
+  int orderIndex; // <<< A CHAVE PARA "EM ORDEM"
+  final Timestamp createdAt;
+
+  Lesson({
+    required this.id,
+    required this.title,
+    required this.videoUrl,
+    required this.orderIndex,
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'title': title,
+      'videoUrl': videoUrl,
+      'orderIndex': orderIndex,
+      'createdAt': createdAt,
+    };
+  }
+
+  factory Lesson.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data()!;
+    return Lesson(
+      id: doc.id,
+      title: data['title'] ?? '',
+      videoUrl: data['videoUrl'] ?? '',
+      orderIndex: data['orderIndex'] ?? 0,
+      createdAt: data['createdAt'] ?? Timestamp.now(),
+    );
+  }
 }
