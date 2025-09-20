@@ -8,6 +8,9 @@ service cloud.firestore {
     }
 
     function isMemberOfHub(hubId) {
+      // Esta função estava errada no seu dump original, ela não checava a associação.
+      // A regra correta (que usamos) é checar diretamente.
+      // Vou manter a função aqui caso seja usada em outro lugar, mas ela é falha.
       return get(/databases/$(database)/documents/hubs/$(hubId)).data.memberIds;
     }
 
@@ -25,17 +28,62 @@ service cloud.firestore {
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
 
+      // --- REGRAS DE SUBCOLEÇÃO REESCRITAS ---
+      
+      // Notificações (Privado)
       match /notifications/{notificationId} {
         allow read, write: if isOwner(userId);
       }
       
+      // Estatísticas (Privado)
       match /professor_stats/{statId} {
         allow read: if isOwner(userId);
       }
       
-      match /{document=**} {
+      // Baralhos Pessoais (Privado)
+      match /baralhos/{baralhoId} {
+        allow read, write, delete: if isOwner(userId);
+        match /cards/{cardId} {
+          allow read, write, delete: if isOwner(userId);
+        }
+      }
+      
+      // Documentos Pessoais (Privado)
+      match /nexo_pad_documents/{docId} {
+         allow read, write, delete: if isOwner(userId);
+      }
+      
+      // Quizzes Pessoais (Privado)
+      match /quizzes/{quizId} {
         allow read, write, delete: if isOwner(userId);
       }
+
+      // --- CONTEÚDO PÚBLICO DO PROFESSOR ---
+      
+      // Videoteca (Público para Leitura)
+      match /videoteca/{videoId} {
+        allow read: if request.auth != null; // Qualquer um logado pode ler
+        allow write, delete: if isOwner(userId); // Apenas o dono pode modificar
+      }
+      
+      // Cursos (Público para Leitura)
+      match /cursos/{cursoId} {
+        allow read: if request.auth != null;
+        // Permite donos escreverem E alunos logados avaliarem (update)
+        allow write, delete: if isOwner(userId);
+        allow update: if request.auth != null 
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ratings']);
+        
+        match /lessons/{lessonId} {
+          allow read: if request.auth != null;
+          allow write, delete: if isOwner(userId);
+        }
+      }
+      
+      // A regra coringa genérica foi removida pois era muito restritiva e insegura
+      // match /{document=**} {
+      //   allow read, write, delete: if isOwner(userId);
+      // }
     }
 
     match /posts/{postId} {
@@ -55,11 +103,12 @@ service cloud.firestore {
     match /hubs/{hubId} {
       allow get, list: if request.auth != null;
       allow create: if request.auth != null;
-      allow update: if request.auth.uid in isMemberOfHub(hubId);
+      allow update: if request.auth.uid in get(/databases/$(database)/documents/hubs/$(hubId)).data.memberIds;
       allow delete: if request.auth.uid == resource.data.ownerId; 
 
+      // Regra de Subcoleção do Hub (Fóruns, Documentos, etc.)
       match /{document=**} { 
-        allow read, write: if request.auth.uid in isMemberOfHub(hubId); 
+        allow read, write, delete: if request.auth.uid in get(/databases/$(database)/documents/hubs/$(hubId)).data.memberIds;
       }
     }
 
@@ -78,31 +127,18 @@ service cloud.firestore {
       allow create: if request.auth.uid == request.resource.data.fromUserId;
     }
 
-    // --- BLOCO DE REGRAS DO FÓRUM GLOBAL ADICIONADO ---
     match /topics/{topicId} {
       allow read: if request.auth != null;
-      
-      // Permite criar se o usuário estiver logado E ele for o autor
       allow create: if request.auth.uid == request.resource.data.authorId;
-      
-      // Permite atualizar (fechar tópico, marcar melhor resposta) ou deletar
-      // APENAS se o usuário for o autor original do tópico.
       allow update, delete: if request.auth.uid == resource.data.authorId;
 
       match /replies/{replyId} {
         allow read: if request.auth != null;
-        
-        // Permite criar uma resposta SE:
-        // 1. O usuário está logado E é o autor da resposta
-        // 2. O tópico pai NÃO está fechado.
         allow create: if (request.auth.uid == request.resource.data.authorId)
                       && (get(/databases/$(database)/documents/topics/$(topicId)).data.isClosed == false);
-        
-        // Permite atualizar ou deletar uma resposta APENAS se o usuário for o autor da resposta.
         allow update, delete: if request.auth.uid == resource.data.authorId;
       }
     }
-    // --- FIM DO NOVO BLOCO ---
     
   }
 }

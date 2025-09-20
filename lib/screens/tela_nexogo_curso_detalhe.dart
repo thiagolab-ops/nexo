@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:nexo/models/models.dart';
 import 'package:nexo/screens/tela_nexogo_lesson_form.dart';
+import 'package:nexo/screens/tela_video_player_generica.dart'; // <<< IMPORTADO
 import 'package:nexo/services/firestore_service.dart';
 import 'package:provider/provider.dart';
+// url_launcher não é mais necessário aqui
 
 class TelaNexoGoCursoDetalhe extends StatefulWidget {
   final Curso curso;
@@ -14,27 +16,25 @@ class TelaNexoGoCursoDetalhe extends StatefulWidget {
 
 class _TelaNexoGoCursoDetalheState extends State<TelaNexoGoCursoDetalhe> {
   late final FirestoreService _firestoreService;
-  late List<Lesson> _lessons; // Lista local para gerenciar a reordenação
+  late List<Lesson> _lessons; 
 
   @override
   void initState() {
     super.initState();
     _firestoreService = context.read<FirestoreService>();
-    _lessons = []; // Inicializa vazia
+    _lessons = [];
   }
 
   void _onReorder(int oldIndex, int newIndex) async {
-    // Lógica para reordenar
+    // ... (lógica de reordenar, sem mudanças)
     if (newIndex > oldIndex) {
       newIndex -= 1;
     }
     final Lesson item = _lessons.removeAt(oldIndex);
     _lessons.insert(newIndex, item);
 
-    // Atualiza o estado da UI imediatamente
     setState(() {}); 
 
-    // Atualiza os índices de ordem de todos os itens e envia para o Firebase
     for (int i = 0; i < _lessons.length; i++) {
       _lessons[i].orderIndex = i;
     }
@@ -42,6 +42,7 @@ class _TelaNexoGoCursoDetalheState extends State<TelaNexoGoCursoDetalhe> {
   }
 
   void _deleteLesson(Lesson lesson) async {
+    // ... (lógica de deletar, sem mudanças)
      final bool? confirm = await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -71,7 +72,6 @@ class _TelaNexoGoCursoDetalheState extends State<TelaNexoGoCursoDetalhe> {
             icon: const Icon(Icons.link),
             tooltip: 'Ligar este Curso a um Hub',
             onPressed: () {
-              // TODO: Sprint 5 - Lógica para vincular a Hubs
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Em breve: Ligar Cursos a Hubs!')));
             },
           ),
@@ -87,22 +87,25 @@ class _TelaNexoGoCursoDetalheState extends State<TelaNexoGoCursoDetalhe> {
             return Center(child: Text('Erro: ${snapshot.error}'));
           }
           if (snapshot.hasData) {
-            _lessons = snapshot.data!; // Atualiza nossa lista local com os dados do Firebase
+            _lessons = snapshot.data!; 
           }
           if (_lessons.isEmpty) {
             return const Center(child: Text('Nenhuma aula adicionada.\nClique em + para criar a primeira aula.', textAlign: TextAlign.center));
           }
 
-          // A MÁGICA: Uma lista que pode ser reordenada!
           return ReorderableListView.builder(
             padding: const EdgeInsets.all(8.0),
             itemCount: _lessons.length,
             itemBuilder: (context, index) {
               final lesson = _lessons[index];
+              final thumbnailUrl = lesson.thumbnailUrl;
+
               return Card(
-                key: ValueKey(lesson.id), // A Key é essencial para o ReorderableListView
+                key: ValueKey(lesson.id), 
                 child: ListTile(
-                  leading: const Icon(Icons.play_circle_fill_outlined, color: Colors.redAccent),
+                  leading: thumbnailUrl.isNotEmpty
+                    ? Image.network(thumbnailUrl, width: 100, height: 60, fit: BoxFit.cover, errorBuilder: (c,e,s) => const Icon(Icons.play_circle_fill_outlined, color: Colors.redAccent))
+                    : const Icon(Icons.play_circle_fill_outlined, color: Colors.redAccent, size: 40),
                   title: Text(lesson.title),
                   subtitle: Text(lesson.videoUrl, maxLines: 1, overflow: TextOverflow.ellipsis),
                   trailing: Row(
@@ -122,9 +125,14 @@ class _TelaNexoGoCursoDetalheState extends State<TelaNexoGoCursoDetalhe> {
                         icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
                         onPressed: () => _deleteLesson(lesson),
                       ),
-                      // O Ícone de "arrastar" é adicionado automaticamente pelo ReorderableListView
                     ],
                   ),
+                  // --- ONTAP ATUALIZADO PARA O PLAYER GENÉRICO ---
+                  onTap: () {
+                    Navigator.of(context).push(MaterialPageRoute(
+                        builder: (context) => TelaVideoPlayerGenerica(videoUrl: lesson.videoUrl, videoTitle: lesson.title),
+                    ));
+                  },
                 ),
               );
             },
@@ -138,7 +146,7 @@ class _TelaNexoGoCursoDetalheState extends State<TelaNexoGoCursoDetalhe> {
             builder: (context) => TelaNexoGoLessonForm(
               cursoId: widget.curso.id,
               ownerId: widget.curso.ownerId,
-              currentLessonCount: _lessons.length, // Passa a contagem atual para o índice
+              currentLessonCount: _lessons.length,
             ),
           ));
         },

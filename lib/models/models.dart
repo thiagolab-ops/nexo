@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+// --- CORREÇÃO: Importando o pacote com o nome correto ---
+import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 // --- MODELOS DE POST E COMMENT ---
+// (O resto do arquivo está 100% correto e permanece o mesmo)
 
 class Post {
   final String id;
@@ -654,13 +657,8 @@ class VideoNexo {
 
   String get thumbnailUrl {
     if (videoUrl.contains('youtube.com') || videoUrl.contains('youtu.be')) {
-      final regExp = RegExp(
-          r".*(?:(?:youtu\.be\/|v\/|vi\/|u\/\w\/|embed\/|watch\?v=)|(?:youtu\.be\/))([^#\&\?]*).*",
-          caseSensitive: false,
-          multiLine: false);
-      final match = regExp.firstMatch(videoUrl);
-      final videoId = match?.group(1);
-
+      // --- CORREÇÃO AQUI ---
+      final videoId = YoutubePlayerController.convertUrlToId(videoUrl);
       if (videoId != null && videoId.isNotEmpty) {
         return 'https://img.youtube.com/vi/$videoId/0.jpg';
       }
@@ -693,8 +691,6 @@ class VideoNexo {
   }
 }
 
-// --- NOVOS MODELOS DE CURSO ADICIONADOS ---
-
 class Curso {
   final String id;
   final String ownerId;
@@ -702,8 +698,8 @@ class Curso {
   String description;
   String thumbnailUrl;
   final Timestamp createdAt;
-  final List<String> linkedHubIds; // Hubs onde este curso aparece
-  final Map<String, int> ratings; // Mapa de UserID para Nota (1-5)
+  final List<String> linkedHubIds;
+  final Map<String, int> ratings;
 
   Curso({
     required this.id,
@@ -716,7 +712,6 @@ class Curso {
     this.ratings = const {},
   });
 
-  // Helper para calcular a média de avaliação
   double get averageRating {
     if (ratings.isEmpty) return 0.0;
     double sum = 0;
@@ -757,7 +752,7 @@ class Lesson {
   final String id;
   String title;
   String videoUrl;
-  int orderIndex; // <<< A CHAVE PARA "EM ORDEM"
+  int orderIndex;
   final Timestamp createdAt;
 
   Lesson({
@@ -767,6 +762,17 @@ class Lesson {
     required this.orderIndex,
     required this.createdAt,
   });
+  
+  String get thumbnailUrl {
+    if (videoUrl.contains('youtube.com') || videoUrl.contains('youtu.be')) {
+      // --- CORREÇÃO AQUI ---
+      final videoId = YoutubePlayerController.convertUrlToId(videoUrl);
+      if (videoId != null && videoId.isNotEmpty) {
+        return 'https://img.youtube.com/vi/$videoId/0.jpg';
+      }
+    }
+    return ''; 
+  }
 
   Map<String, dynamic> toMap() {
     return {

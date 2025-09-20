@@ -4,10 +4,11 @@ import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:nexo/screens/tela_dashboard_professor.dart';
 import 'package:nexo/screens/tela_moderacao.dart';
-import 'package:nexo/screens/tela_nexogo_admin.dart'; // <<< ARQUIVO NOVO IMPORTADO
+import 'package:nexo/screens/tela_nexogo_admin.dart';
 import 'package:nexo/screens/tela_politica.dart'; 
 import 'package:nexo/screens/tela_termos.dart'; 
 import 'package:nexo/services/theme_provider.dart'; 
+import 'package:share_plus/share_plus.dart'; // <<< PACOTE DE COMPARTILHAMENTO
 import '../models/models.dart';
 import '../services/profile_service.dart';
 import '../utils.dart';
@@ -65,6 +66,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
   }
 
   Future<void> _pickAndUploadImage() async {
+    // ... (código de upload de imagem, sem mudanças)
     setState(() => _isUploading = true);
     try {
       final picker = ImagePicker();
@@ -92,6 +94,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
   }
   
   Future<void> _salvarAlteracoes() async {
+    // ... (código de salvar, sem mudanças)
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
     try {
@@ -130,6 +133,18 @@ class _TelaPerfilState extends State<TelaPerfil> {
     }
   }
 
+  // --- NOVA FUNÇÃO DE COMPARTILHAMENTO ---
+  void _shareInviteLink(String username) {
+    // ATENÇÃO: Usando um placeholder de URL. Quando o app estiver no ar (Fase 5),
+    // trocaremos "nexo.app" pelo seu domínio real.
+    final String inviteLink = 'https://nexo.app/join?ref=$username';
+    final String text = 'Venha para o Nexo, a rede social de estudos que vai revolucionar seu aprendizado! Cadastre-se com meu link: $inviteLink';
+    
+    // Usa o pacote Share para abrir o diálogo nativo
+    Share.share(text, subject: 'Convite para o Nexo');
+  }
+  // --- FIM DA NOVA FUNÇÃO ---
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
@@ -165,6 +180,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
                 child: Column(
                   children: [
                     Stack(
+                      // ... (código do avatar, sem mudanças) ...
                       alignment: Alignment.center,
                       children: [
                         GestureDetector(
@@ -191,6 +207,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
                     const SizedBox(height: 24),
                     
                     if (userProfile.role == 'professor') ...[
+                      // ... (links de professor, sem mudanças) ...
                       ListTile(
                         leading: const Icon(Icons.dashboard_outlined),
                         title: const Text('Meu Dashboard'),
@@ -211,7 +228,6 @@ class _TelaPerfilState extends State<TelaPerfil> {
                           ));
                         },
                       ),
-                      // --- LINK DO NEXO GO ADICIONADO ---
                       ListTile(
                         leading: const Icon(Icons.video_library_outlined),
                         title: const Text('Meu Nexo Go (Vídeos)'),
@@ -226,6 +242,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
                     ],
 
                     Form(
+                      // ... (formulário do perfil, sem mudanças) ...
                       key: _formKey,
                       child: Column(
                         children: [
@@ -257,6 +274,14 @@ class _TelaPerfilState extends State<TelaPerfil> {
                         onPressed: _salvarAlteracoes,
                       ),
                     const Divider(height: 48),
+
+                    // --- BOTÃO DE CONVITE ADICIONADO ---
+                    ListTile(
+                      leading: const Icon(Icons.person_add_alt_1_outlined, color: Colors.lightBlueAccent),
+                      title: const Text('Convidar Amigos'),
+                      onTap: () => _shareInviteLink(userProfile.username),
+                    ),
+                    // --- FIM DO BOTÃO ---
 
                     SwitchListTile(
                       title: const Text('Modo Escuro'),

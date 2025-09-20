@@ -12,7 +12,7 @@ class FirestoreService {
   }
 
   // --- FUNÇÕES DE BARALHO (DECK) ---
-
+  // (Todo o código de Baralho/Cartão permanece o mesmo)
   Future<void> createDeckFromPost(Post post, List<Map<String, String>> cardsData) async {
     final batch = _db.batch();
     
@@ -118,7 +118,7 @@ class FirestoreService {
   }
 
   // --- CRUD DA VIDEOTECA (ARQUIVO) ---
-
+  // (Código do VideoNexo permanece o mesmo)
   CollectionReference<VideoNexo> _videoRef(String userId) {
     return _db.collection('users').doc(userId).collection('videoteca')
       .withConverter<VideoNexo>(
@@ -148,7 +148,6 @@ class FirestoreService {
   
   // --- CRUD DE CURSOS E LIÇÕES ADICIONADO ---
   
-  // Referência para Cursos
   CollectionReference<Curso> _cursosRef(String userId) {
     return _db.collection('users').doc(userId).collection('cursos')
       .withConverter<Curso>(
@@ -157,7 +156,6 @@ class FirestoreService {
       );
   }
   
-  // Referência para Lições (dentro de um curso)
   CollectionReference<Lesson> _lessonsRef(String userId, String cursoId) {
      return _cursosRef(userId).doc(cursoId).collection('lessons')
        .withConverter<Lesson>(
@@ -178,19 +176,21 @@ class FirestoreService {
         .snapshots()
         .map((snap) => snap.docs.map((doc) => doc.data()).toList());
   }
+
+  // <<< FUNÇÃO QUE FALTAVA ADICIONADA AQUI >>>
+  Stream<DocumentSnapshot<Curso>> getCursoStream(String userId, String cursoId) {
+    return _cursosRef(userId).doc(cursoId).snapshots();
+  }
   
   Future<void> updateCurso(String userId, Curso curso) async {
     await _cursosRef(userId).doc(curso.id).update(curso.toMap());
   }
 
   Future<void> deleteCurso(String userId, String cursoId) async {
-    // Nota: Isso não deleta as subcoleções de lições. Para um MVP está ok.
-    // A deleção completa requer uma Cloud Function.
     await _cursosRef(userId).doc(cursoId).delete();
   }
 
   Future<void> rateCurso(String ownerId, String cursoId, String raterUserId, int rating) async {
-    // Salva a nota do usuário em um mapa para garantir um voto por usuário
     final fieldToUpdate = 'ratings.$raterUserId';
     await _cursosRef(ownerId).doc(cursoId).update({
       fieldToUpdate: rating,
@@ -201,7 +201,7 @@ class FirestoreService {
   
   Stream<List<Lesson>> streamLessons(String userId, String cursoId) {
     return _lessonsRef(userId, cursoId)
-        .orderBy('orderIndex') // <<< A MÁGICA DA "ORDEM"
+        .orderBy('orderIndex')
         .snapshots()
         .map((snap) => snap.docs.map((doc) => doc.data()).toList());
   }

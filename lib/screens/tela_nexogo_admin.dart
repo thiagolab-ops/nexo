@@ -2,10 +2,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:nexo/models/models.dart';
 import 'package:nexo/screens/tela_nexogo_arquivo_form.dart';
-import 'package:nexo/screens/tela_nexogo_curso_detalhe.dart'; // <<< IMPORTADO
+import 'package:nexo/screens/tela_nexogo_curso_detalhe.dart';
 import 'package:nexo/screens/tela_nexogo_curso_form.dart';
+import 'package:nexo/screens/tela_video_player_generica.dart'; // <<< IMPORTADO
 import 'package:nexo/services/firestore_service.dart';
 import 'package:provider/provider.dart';
+// url_launcher não é mais necessário aqui
+// import 'package:url_launcher/url_launcher.dart'; 
 
 class TelaNexoGoAdmin extends StatefulWidget {
   const TelaNexoGoAdmin({super.key});
@@ -26,7 +29,8 @@ class _TelaNexoGoAdminState extends State<TelaNexoGoAdmin> with SingleTickerProv
     _firestoreService = context.read<FirestoreService>();
     _currentUserId = FirebaseAuth.instance.currentUser!.uid;
   }
-
+  
+  // (Funções de deletar permanecem iguais)
   void _showDeleteVideoDialog(VideoNexo video) async {
      final bool? confirm = await showDialog(
       context: context,
@@ -106,15 +110,6 @@ class _TelaNexoGoAdminState extends State<TelaNexoGoAdmin> with SingleTickerProv
   }
 
   Widget _buildArquivosList() {
-    // --- ESTA É A CORREÇÃO DE LAYOUT QUE VOCÊ MENCIONOU (DO XADREZ) ---
-    // Envolvemos a lista em um SingleChildScrollView para garantir que ela role
-    // mesmo que o StreamBuilder/ListView esteja dentro de algo que limite seu tamanho.
-    // Embora o TabBarView deva dar a ele espaço infinito, esta é uma garantia extra.
-    // A causa mais provável do seu bug de layout é o SingleChildScrollView que falta
-    // na tela de PERFIL, onde a Lista de Admin está. Vamos corrigir esta primeiro.
-    // CORREÇÃO: O layout do seu Xadrez quebrou porque estava numa Row. Este ListView
-    // é o filho direto do TabBarView, ele não deve quebrar. O "bug" que você viu
-    // foi o "Não Toca", que já explicamos. Vamos em frente.
     return StreamBuilder<List<VideoNexo>>(
       stream: _firestoreService.streamVideos(_currentUserId),
       builder: (context, snapshot) {
@@ -151,9 +146,10 @@ class _TelaNexoGoAdminState extends State<TelaNexoGoAdmin> with SingleTickerProv
                       ),
                   ],
                 ),
+                // --- ONTAP ATUALIZADO PARA O PLAYER GENÉRICO ---
                 onTap: () {
                    Navigator.of(context).push(MaterialPageRoute(
-                      builder: (context) => TelaNexoGoArquivoForm(videoToEdit: video),
+                      builder: (context) => TelaVideoPlayerGenerica(videoUrl: video.videoUrl, videoTitle: video.title),
                    ));
                 },
               ),
@@ -197,7 +193,6 @@ class _TelaNexoGoAdminState extends State<TelaNexoGoAdmin> with SingleTickerProv
                       ),
                   ],
                 ),
-                // --- ONTAP ATUALIZADO ---
                 onTap: () {
                   Navigator.of(context).push(MaterialPageRoute(
                     builder: (context) => TelaNexoGoCursoDetalhe(curso: curso),

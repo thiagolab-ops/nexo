@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:nexo/models/models.dart';
 import 'package:nexo/screens/tela_curso_player.dart';
+import 'package:nexo/screens/tela_video_player_generica.dart'; // <<< IMPORTADO
 import 'package:nexo/services/firestore_service.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
+// url_launcher não é mais necessário aqui
 
 class TelaNexoGoPublica extends StatefulWidget {
-  final UserModel profUser; // O perfil do professor que estamos vendo
+  final UserModel profUser; 
   const TelaNexoGoPublica({super.key, required this.profUser});
 
   @override
@@ -22,19 +23,6 @@ class _TelaNexoGoPublicaState extends State<TelaNexoGoPublica> with SingleTicker
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _firestoreService = context.read<FirestoreService>();
-  }
-  
-  Future<void> _launchVideo(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri != null && await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não foi possível abrir o link do vídeo.')),
-        );
-      }
-    }
   }
 
   @override
@@ -61,7 +49,6 @@ class _TelaNexoGoPublicaState extends State<TelaNexoGoPublica> with SingleTicker
     );
   }
 
-  // Lista Pública de CURSOS
   Widget _buildCursosList(BuildContext context) {
     return StreamBuilder<List<Curso>>(
       stream: _firestoreService.streamCursos(widget.profUser.id),
@@ -100,7 +87,6 @@ class _TelaNexoGoPublicaState extends State<TelaNexoGoPublica> with SingleTicker
     );
   }
 
-  // Lista Pública de ARQUIVOS (Vídeos Soltos)
   Widget _buildArquivosList(BuildContext context) {
     return StreamBuilder<List<VideoNexo>>(
       stream: _firestoreService.streamVideos(widget.profUser.id),
@@ -124,7 +110,12 @@ class _TelaNexoGoPublicaState extends State<TelaNexoGoPublica> with SingleTicker
                 title: Text(video.title),
                 subtitle: Text(video.subject),
                 trailing: const Icon(Icons.play_arrow),
-                onTap: () => _launchVideo(video.videoUrl),
+                // --- ONTAP ATUALIZADO PARA O PLAYER GENÉRICO ---
+                onTap: () {
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (context) => TelaVideoPlayerGenerica(videoUrl: video.videoUrl, videoTitle: video.title),
+                  ));
+                },
               ),
             );
           },
