@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'package:cloud_functions/cloud_functions.dart'; // <<< IMPORTADO
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:nexo/services/profile_service.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // <<< IMPORTADO
 
 class TelaCriarPerfil extends StatefulWidget {
   const TelaCriarPerfil({super.key});
@@ -12,15 +15,17 @@ class TelaCriarPerfil extends StatefulWidget {
 
 class _TelaCriarPerfilState extends State<TelaCriarPerfil> {
   final _formKey = GlobalKey<FormState>();
-  final _profileService = ProfileService();
   final _user = FirebaseAuth.instance.currentUser;
+  
+  // Instância do Cloud Functions
+  final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(region: 'us-central1');
 
   final _usernameController = TextEditingController();
   final _bioController = TextEditingController();
 
   Timer? _debounce;
   bool _isCheckingUsername = false;
-  bool? _isUsernameUnique; // Alterado para nulo para estado inicial
+  bool? _isUsernameUnique;
   String? _usernameError;
   bool _isSaving = false;
 
@@ -42,7 +47,7 @@ class _TelaCriarPerfilState extends State<TelaCriarPerfil> {
   void _onUsernameChanged() {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     setState(() {
-      _isUsernameUnique = null; // Reseta o estado enquanto digita
+      _isUsernameUnique = null; 
       _isCheckingUsername = false;
     });
 
@@ -57,7 +62,7 @@ class _TelaCriarPerfilState extends State<TelaCriarPerfil> {
       }
       
       setState(() => _isCheckingUsername = true);
-      final isUnique = await _profileService.isUsernameUnique(username);
+      final isUnique = await context.read<ProfileService>().isUsernameUnique(username);
       if(mounted) {
         setState(() {
           _isUsernameUnique = isUnique;
@@ -69,7 +74,6 @@ class _TelaCriarPerfilState extends State<TelaCriarPerfil> {
   }
 
   Future<void> _finalizarCadastro() async {
-    // Validação final antes de salvar
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     if (_isUsernameUnique == null || !_isUsernameUnique!) {
@@ -84,18 +88,39 @@ class _TelaCriarPerfilState extends State<TelaCriarPerfil> {
     
     setState(() => _isSaving = true);
 
-    await _profileService.createUserProfile(
+    // 1. Cria o perfil do usuário (como antes)
+    await context.read<ProfileService>().createUserProfile(
       uid: _user!.uid,
       username: _usernameController.text.trim(),
       email: _user!.email ?? '',
       bio: _bioController.text.trim(),
       interests: [], 
     );
-    // A navegação continua sendo automática pelo AuthGate.
-    // O setState é só para o feedback visual.
-    if(mounted) {
-      setState(() => _isSaving = false);
+
+    // --- INÍCIO DA NOVA LÓGICA DE CONVITE ---
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final referralUsername = prefs.getString('referralUsername');
+
+      if (referralUsername != null && referralUsername.isNotEmpty) {
+        // 2. Chama a Cloud Function. O ID do novo usuário (o seu)
+        // é enviado automaticamente pela autenticação.
+        final callable = _functions.httpsCallable('processarConvite');
+        await callable.call({'referralUsername': referralUsername});
+        
+        // 3. Limpa a referência para que não seja usada novamente
+        await prefs.remove('referralUsername');
+      }
+    } catch (e) {
+      // Se a função de convite falhar, não impede o login.
+      // Apenas registramos no console para depuração.
+      print('Erro ao processar convite: $e');
     }
+    // --- FIM DA NOVA LÓGICA ---
+    
+    // O AuthGate detectará a mudança (hasCompletedOnboarding=true) 
+    // e navegará automaticamente para a TelaPrincipal.
+    // Não precisamos mudar o _isSaving para false.
   }
 
   @override
@@ -160,7 +185,7 @@ class _TelaCriarPerfilState extends State<TelaCriarPerfil> {
                   _isSaving
                   ? const Center(child: CircularProgressIndicator())
                   : ElevatedButton(
-                    onPressed: _finalizarCadastro, // O botão agora sempre chama a função
+                    onPressed: _finalizarCadastro,
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),

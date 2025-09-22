@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:nexo/models/models.dart';
+import 'package:nexo/screens/tela_perfil_usuario.dart'; 
 import 'package:nexo/services/report_service.dart';
 import 'package:nexo/utils.dart';
 import 'package:nexo/widgets/user_avatar.dart';
@@ -53,6 +54,17 @@ class _ForumWidgetState extends State<ForumWidget> {
     _searchController.dispose(); 
     super.dispose();
   }
+  
+  // --- FUNÇÃO DE NAVEGAÇÃO CORRIGIDA ---
+  void _navigateToProfile(String userId) {
+    // A trava "if (userId == widget.currentUser.id) return;" FOI REMOVIDA.
+    // Agora você pode clicar no seu próprio perfil.
+    
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (context) => TelaPerfilUsuario(userId: userId),
+    ));
+  }
+  // --- FIM DA CORREÇÃO ---
 
   void _selectTopic(String topicId, String title) {
     setState(() {
@@ -78,6 +90,7 @@ class _ForumWidgetState extends State<ForumWidget> {
     required String contentId,
     required String contentType,
   }) {
+    // ... (função de denúncia permanece a mesma)
     final reportController = TextEditingController();
     final reportOptions = ['Assédio', 'Discurso de Ódio', 'Spam', 'Outro'];
     String? selectedReason;
@@ -145,6 +158,7 @@ class _ForumWidgetState extends State<ForumWidget> {
   }
 
   Widget _buildTopicsListView() {
+    // ... (build da lista de tópicos permanece o mesmo)
     return ListView(
       padding: const EdgeInsets.all(16.0),
       children: [
@@ -181,6 +195,7 @@ class _ForumWidgetState extends State<ForumWidget> {
   }
 
   Widget _buildNewTopicForm() {
+    // ... (build do formulário permanece o mesmo)
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -216,26 +231,23 @@ class _ForumWidgetState extends State<ForumWidget> {
   }
 
   Widget _buildTopicsList() {
+    // ... (lógica de query permanece a mesma)
     Query query;
     final tag = _searchTag.trim().toLowerCase();
 
     if (tag.isNotEmpty) {
-      // --- CORREÇÃO DE SINTAXE AQUI ---
-      // De: .where('tags', 'array-contains', tag)
-      // Para: .where('tags', arrayContains: tag)
       query = widget.topicsCollection
           .where('tags', arrayContains: tag)
           .orderBy('createdAt', descending: true);
     } else {
       query = widget.topicsCollection.orderBy('createdAt', descending: true);
     }
-    // --- FIM DA CORREÇÃO ---
 
     return StreamBuilder<QuerySnapshot>(
       stream: query.snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return Center(child: Text("Erro ao carregar tópicos. Você já fez o deploy dos índices do Firebase? (firebase deploy --only firestore:indexes)"));
+          return Center(child: Text("Erro ao carregar tópicos. Você já fez o deploy dos índices do Firebase?"));
         }
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
         if (snapshot.data!.docs.isEmpty) return const Center(child: Text("Nenhum tópico encontrado."));
@@ -250,6 +262,7 @@ class _ForumWidgetState extends State<ForumWidget> {
             
             final String authorUsername = data['authorUsername'] ?? 'Usuário Deletado';
             final String authorPhotoUrl = data['authorPhotoUrl'] ?? '';
+            final String authorId = data['authorId'] ?? '';
             final bool isClosed = data['isClosed'] ?? false;
             final String? bestAnswerId = data['bestAnswerId'];
             final List<String> tags = List<String>.from(data['tags'] ?? []);
@@ -257,7 +270,10 @@ class _ForumWidgetState extends State<ForumWidget> {
             return Card(
               color: isClosed ? Colors.grey[900] : null,
               child: ListTile(
-                leading: UserAvatar(username: authorUsername, photoUrl: authorPhotoUrl, radius: 20),
+                leading: InkWell(
+                  onTap: () => _navigateToProfile(authorId), // <-- Chama a função corrigida
+                  child: UserAvatar(username: authorUsername, photoUrl: authorPhotoUrl, radius: 20),
+                ),
                 title: Text(data['title'] ?? 'Sem título', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -271,9 +287,12 @@ class _ForumWidgetState extends State<ForumWidget> {
                         padding: const EdgeInsets.only(bottom: 8.0),
                         child: Text("Temas: ${tags.join(', ')}", style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey)),
                       ),
-                    Text(
-                      'Por: $authorUsername em ${_formatTimestamp(data['createdAt'])}',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    InkWell(
+                      onTap: () => _navigateToProfile(authorId), // <-- Chama a função corrigida
+                      child: Text(
+                        'Por: $authorUsername em ${_formatTimestamp(data['createdAt'])}',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
                     ),
                   ],
                 ),
@@ -294,6 +313,7 @@ class _ForumWidgetState extends State<ForumWidget> {
   }
 
   Widget _buildSingleTopicView(String topicId, String topicTitle) {
+    // ... (Esta função permanece a mesma)
     return Scaffold(
        appBar: AppBar(
         title: Text(topicTitle, overflow: TextOverflow.ellipsis),
@@ -327,9 +347,15 @@ class _ForumWidgetState extends State<ForumWidget> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                       ListTile(
-                                        leading: UserAvatar(username: authorUsername, photoUrl: authorPhotoUrl),
+                                        leading: InkWell(
+                                          onTap: () => _navigateToProfile(authorId),
+                                          child: UserAvatar(username: authorUsername, photoUrl: authorPhotoUrl)
+                                        ),
                                         title: Text(topicData['title'] ?? 'Sem título', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                                        subtitle: Text('Por: $authorUsername\nEm: ${_formatTimestamp(topicData['createdAt'])}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                        subtitle: InkWell(
+                                          onTap: () => _navigateToProfile(authorId),
+                                          child: Text('Por: $authorUsername\nEm: ${_formatTimestamp(topicData['createdAt'])}', style: const TextStyle(fontSize: 12, color: Colors.grey))
+                                        ),
                                         trailing: PopupMenuButton<String>(
                                           onSelected: (value) {
                                             if (value == 'report') {
@@ -384,6 +410,7 @@ class _ForumWidgetState extends State<ForumWidget> {
   }
   
   Widget _buildRepliesList(String topicId, bool isTopicOwner, bool isTopicClosed, String? bestAnswerId) {
+    // ... (Esta função permanece a mesma, já estava correta)
     return StreamBuilder<QuerySnapshot>(
         stream: widget.topicsCollection.doc(topicId).collection('replies').orderBy('createdAt').snapshots(),
         builder: (context, snapshot) {
@@ -414,9 +441,15 @@ class _ForumWidgetState extends State<ForumWidget> {
                           side: BorderSide(color: isBestAnswer ? Colors.greenAccent : Colors.transparent, width: 2)
                         ),
                         child: ListTile(
-                           leading: UserAvatar(username: authorUsername, photoUrl: authorPhotoUrl, radius: 18),
+                           leading: InkWell(
+                             onTap: () => _navigateToProfile(authorId),
+                             child: UserAvatar(username: authorUsername, photoUrl: authorPhotoUrl, radius: 18)
+                           ),
                            title: Text(data['content'] ?? ''),
-                           subtitle: Text('Por: $authorUsername em ${_formatTimestamp(data['createdAt'])}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                           subtitle: InkWell(
+                             onTap: () => _navigateToProfile(authorId),
+                             child: Text('Por: $authorUsername em ${_formatTimestamp(data['createdAt'])}', style: const TextStyle(fontSize: 12, color: Colors.grey))
+                           ),
                            trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -450,6 +483,7 @@ class _ForumWidgetState extends State<ForumWidget> {
   }
 
   Widget _buildReplyForm(String topicId) {
+    // ... (Esta função permanece a mesma)
       return Card(
         child: Padding(
             padding: const EdgeInsets.all(16.0),
@@ -475,6 +509,7 @@ class _ForumWidgetState extends State<ForumWidget> {
   }
 
   Future<void> _addTopic() async {
+    // ... (Esta função permanece a mesma)
     if (_topicTitleController.text.isNotEmpty && _topicContentController.text.isNotEmpty) {
       
       final tags = _topicTagsController.text
@@ -506,6 +541,7 @@ class _ForumWidgetState extends State<ForumWidget> {
   }
   
   Future<void> _addReply(String topicId) async {
+    // ... (Esta função permanece a mesma)
       if(_replyContentController.text.isNotEmpty) {
           await widget.topicsCollection.doc(topicId).collection('replies').add({
               'content': _replyContentController.text,

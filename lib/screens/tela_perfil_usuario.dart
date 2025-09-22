@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:nexo/screens/tela_chat_mensagens.dart';
 import 'package:nexo/screens/tela_nexogo_publica.dart'; 
+import 'package:nexo/screens/widgets_perfil/perfil_forum_tab.dart'; // <<< IMPORTADO
 import 'package:nexo/services/chat_service.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
@@ -19,7 +20,7 @@ class _TelaPerfilUsuarioState extends State<TelaPerfilUsuario> with SingleTicker
   late final ProfileService _profileService;
   late final ChatService _chatService;
   TabController? _tabController;
-  int _tabCount = 1;
+  int _tabCount = 2; // Agora começa com 2 (Sobre, Tópicos)
 
   @override
   void initState() {
@@ -29,14 +30,12 @@ class _TelaPerfilUsuarioState extends State<TelaPerfilUsuario> with SingleTicker
   }
   
   void _initTabs(UserModel user) {
-    int count = 1; // Aba "Sobre"
+    int count = 2; // 1. Sobre, 2. Tópicos
     
     if (user.role == 'professor') {
-      count++; // Adiciona a aba "Nexo Go"
+      count++; // 3. Adiciona a aba "Nexo Go"
     }
 
-    // --- CORREÇÃO DE SEGURANÇA ---
-    // Só chama setState se o widget ainda estiver "montado" (na tela)
     if (mounted) {
       setState(() {
         _tabCount = count;
@@ -72,7 +71,7 @@ class _TelaPerfilUsuarioState extends State<TelaPerfilUsuario> with SingleTicker
   Widget build(BuildContext context) {
     final currentUserProfile = Provider.of<UserModel?>(context);
 
-    return StreamBuilder<UserModel?>( // Esta é a linha ~74
+    return StreamBuilder<UserModel?>(
       stream: _profileService.getUserProfileStream(widget.userId),
       builder: (context, snapshot) {
         if (!snapshot.hasData || currentUserProfile == null) {
@@ -81,30 +80,29 @@ class _TelaPerfilUsuarioState extends State<TelaPerfilUsuario> with SingleTicker
         
         final userProfile = snapshot.data!;
         
-        // --- ESTA É A CORREÇÃO PRINCIPAL ---
-        // (Era linha ~85)
         if (_tabController == null) {
-           // Em vez de chamar _initTabs() DIRETAMENTE (o que causa o erro),
-           // nós o AGENDAMOS para rodar imediatamente APÓS este build terminar.
            WidgetsBinding.instance.addPostFrameCallback((_) {
               _initTabs(userProfile);
            });
         }
-        // --- FIM DA CORREÇÃO ---
 
         final bool isFollowing = currentUserProfile.followingIds.contains(userProfile.id);
         final bool isFollower = userProfile.followingIds.contains(currentUserProfile.id);
         final bool isCoNexo = isFollowing && isFollower;
 
+        // Cria a lista de abas dinamicamente
         List<Widget> tabs = [
           const Tab(text: 'Sobre'),
+          const Tab(text: 'Tópicos no Fórum'), // <<< NOVA ABA
         ];
         if (userProfile.role == 'professor') {
           tabs.add(const Tab(text: 'Nexo Go'));
         }
         
+        // Cria a lista de views das abas
         List<Widget> tabViews = [
            _buildSobreTab(userProfile, currentUserProfile, isCoNexo, isFollowing),
+           PerfilForumTab(userId: userProfile.id), // <<< NOVA TELA
         ];
         if (userProfile.role == 'professor') {
           tabViews.add(TelaNexoGoPublica(profUser: userProfile));
@@ -113,13 +111,12 @@ class _TelaPerfilUsuarioState extends State<TelaPerfilUsuario> with SingleTicker
         return Scaffold(
           appBar: AppBar(
             title: Text(userProfile.username),
-            // Só mostra a TabBar DEPOIS que o controller for inicializado
             bottom: _tabController != null ? TabBar(
               controller: _tabController,
+              isScrollable: true, // Permite rolar se tiver muitas abas
               tabs: tabs,
-            ) : null, // Mostra nada (ou um indicador) enquanto o controller é nulo
+            ) : null,
           ),
-          // Mostra um spinner enquanto o TabController está sendo criado (no callback pós-frame)
           body: _tabController == null 
             ? const Center(child: CircularProgressIndicator())
             : TabBarView(
@@ -132,6 +129,7 @@ class _TelaPerfilUsuarioState extends State<TelaPerfilUsuario> with SingleTicker
   }
 
   Widget _buildSobreTab(UserModel userProfile, UserModel currentUserProfile, bool isCoNexo, bool isFollowing) {
+    // ... (Esta função permanece a mesma)
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24.0),
       child: Center(

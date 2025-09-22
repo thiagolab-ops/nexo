@@ -146,7 +146,6 @@ exports.followUser = onCall(async (request) => {
   const currentUserRef = db.collection("users").doc(currentUserId);
   const targetUserRef = db.collection("users").doc(targetUserId);
 
-  // Lê os dois perfis ANTES de escrever
   const currentUserDoc = await currentUserRef.get();
   const targetUserDoc = await targetUserRef.get();
 
@@ -160,19 +159,16 @@ exports.followUser = onCall(async (request) => {
 
   const batch = db.batch();
 
-  // Atualiza as listas de seguidores
   batch.update(currentUserRef, {followingIds: admin.firestore.FieldValue.arrayUnion(targetUserId)});
   batch.update(targetUserRef, {followerIds: admin.firestore.FieldValue.arrayUnion(currentUserId)});
 
-  // LÓGICA CO-NEXO: Checa se o usuário alvo JÁ seguia o usuário atual
   const isCoNexo = targetUserData.followingIds && targetUserData.followingIds.includes(currentUserId);
 
   if (isCoNexo) {
-    // É um Co-Nexo! Notifica AMBOS os usuários.
     const notificationForTarget = {
       text: `Você e ${currentUserUsername} agora são Co-Nexos!`,
       sourceType: "new_conexo",
-      sourceId: currentUserId, // Link para o perfil de quem deu o follow
+      sourceId: currentUserId,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       isRead: false,
     };
@@ -182,7 +178,7 @@ exports.followUser = onCall(async (request) => {
     const notificationForCurrent = {
       text: `Você e ${targetUserUsername} agora são Co-Nexos!`,
       sourceType: "new_conexo",
-      sourceId: targetUserId, // Link para o perfil do alvo
+      sourceId: targetUserId,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       isRead: false,
     };
@@ -191,7 +187,6 @@ exports.followUser = onCall(async (request) => {
 
     logger.info(`Co-Nexo criado entre ${currentUserId} e ${targetUserId}.`);
   } else {
-    // Fluxo normal: Apenas um "novo seguidor"
     const notificationPayload = {
       text: `${currentUserUsername} começou a te seguir.`,
       sourceType: "new_follower",
@@ -225,12 +220,91 @@ exports.unfollowUser = onCall(async (request) => {
   batch.update(currentUserRef, {followingIds: admin.firestore.FieldValue.arrayRemove(targetUserId)});
   batch.update(targetUserRef, {followerIds: admin.firestore.FieldValue.arrayRemove(currentUserId)});
 
-  // (Opcional: podemos adicionar lógica aqui para remover a notificação "Co-Nexo" se quisermos)
-
   await batch.commit();
   logger.info(`Usuário ${currentUserId} deixou de seguir ${targetUserId}.`);
   return {status: "success"};
 });
+
+// --- NOVA FUNÇÃO DE CONVITE ADICIONADA ---
+exports.processarConvite = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "A função deve ser chamada por um usuário autenticado.");
+  }
+
+  const newUserId = request.auth.uid; // ID do NOVO usuário (que chamou a função)
+  const referralUsername = request.data.referralUsername; // @username de quem convidou
+
+  if (!referralUsername) {
+    throw new HttpsError("invalid-argument", "O 'referralUsername' é obrigatório.");
+  }
+
+  const usersRef = db.collection("users");
+
+  // 1. Encontra o usuário que convidou (Referrer)
+  const referrerQuery = await usersRef.where("username", "==", referralUsername).limit(1).get();
+
+  if (referrerQuery.empty) {
+    logger.error(`Usuário de referência não encontrado: ${referralUsername}`);
+    return {status: "error", message: "Referrer not found"};
+  }
+
+  const referrerDoc = referrerQuery.docs[0];
+  const referrerId = referrerDoc.id;
+  const referrerUsername = referrerDoc.data().username;
+
+  // 2. Pega os dados do novo usuário (New User)
+  const newUserDoc = await usersRef.doc(newUserId).get();
+  if (!newUserDoc.exists) {
+    throw new HttpsError("not-found", "Perfil do novo usuário não encontrado.");
+  }
+  const newUserUsername = newUserDoc.data().username;
+
+  // 3. Previne auto-referência
+  if (referrerId === newUserId) {
+    logger.info("Usuário tentou se auto-convidar.");
+    return {status: "success", message: "Self-referral ignored"};
+  }
+
+  // 4. Cria a conexão Co-Nexo (ambos se seguem)
+  const batch = db.batch();
+  const newUserRef = usersRef.doc(newUserId);
+  const referrerRef = usersRef.doc(referrerId);
+
+  // Novo usuário segue o Referrer
+  batch.update(newUserRef, {followingIds: admin.firestore.FieldValue.arrayUnion(referrerId)});
+  batch.update(referrerRef, {followerIds: admin.firestore.FieldValue.arrayUnion(newUserId)});
+
+  // Referrer segue o Novo usuário
+  batch.update(referrerRef, {followingIds: admin.firestore.FieldValue.arrayUnion(newUserId)});
+  batch.update(newUserRef, {followerIds: admin.firestore.FieldValue.arrayUnion(referrerId)});
+
+  // 5. Envia notificação de "Co-Nexo" para AMBOS
+  const notificationForReferrer = {
+    text: `Você e ${newUserUsername} agora são Co-Nexos!`,
+    sourceType: "new_conexo",
+    sourceId: newUserId,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    isRead: false,
+  };
+  const notifRefReferrer = referrerRef.collection("notifications").doc();
+  batch.set(notifRefReferrer, notificationForReferrer);
+
+  const notificationForNewUser = {
+    text: `Você e ${referrerUsername} agora são Co-Nexos!`,
+    sourceType: "new_conexo",
+    sourceId: referrerId,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    isRead: false,
+  };
+  const notifRefNewUser = newUserRef.collection("notifications").doc();
+  batch.set(notifRefNewUser, notificationForNewUser);
+
+  await batch.commit();
+
+  logger.info(`Convite processado: Co-Nexo criado entre ${newUserId} e ${referrerId}`);
+  return {status: "success"};
+});
+// --- FIM DA NOVA FUNÇÃO ---
 
 // --- FUNÇÕES DE MANUTENÇÃO (AGENDADAS) ---
 
