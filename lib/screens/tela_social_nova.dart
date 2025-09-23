@@ -1,7 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:nexo/screens/tela_chats_lista.dart'; 
-import 'package:nexo/screens/tela_forum_global.dart';
 import '../models/models.dart';
 import '../services/nexo_hub_service.dart';
 import '../services/profile_service.dart';
@@ -9,14 +8,15 @@ import '../widgets/search_result_tile.dart';
 import '../widgets/user_list_view.dart';
 import 'package:provider/provider.dart';
 
-class TelaSocial extends StatefulWidget {
-  const TelaSocial({super.key});
+// Esta é a NOVA tela Social, que contém apenas a gestão de comunidade
+class TelaSocialNova extends StatefulWidget {
+  const TelaSocialNova({super.key});
 
   @override
-  State<TelaSocial> createState() => _TelaSocialState();
+  State<TelaSocialNova> createState() => _TelaSocialNovaState();
 }
 
-class _TelaSocialState extends State<TelaSocial> with SingleTickerProviderStateMixin {
+class _TelaSocialNovaState extends State<TelaSocialNova> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late final ProfileService _profileService;
   late final NexoHubService _hubService;
@@ -27,7 +27,8 @@ class _TelaSocialState extends State<TelaSocial> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    // Agora tem 5 abas (sem o Fórum)
+    _tabController = TabController(length: 5, vsync: this);
     _profileService = context.read<ProfileService>();
     _hubService = context.read<NexoHubService>();
     _currentUserId = FirebaseAuth.instance.currentUser!.uid;
@@ -62,14 +63,13 @@ class _TelaSocialState extends State<TelaSocial> with SingleTickerProviderStateM
         child: TabBar(
           controller: _tabController,
           isScrollable: true,
+          // Ordem que você pediu
           tabs: const [
-            // --- ABAS REORDENADAS ---
-            Tab(text: 'Fórum Global (Nexo Chan)'), // <<< AGORA É A PRIMEIRA
             Tab(text: 'Conversas'),
-            Tab(text: 'Procurar'),
             Tab(text: 'Seguidores'),
             Tab(text: 'Seguindo'),
             Tab(text: 'Convites de Hub'),
+            Tab(text: 'Procurar'),
           ],
         ),
       ),
@@ -77,20 +77,20 @@ class _TelaSocialState extends State<TelaSocial> with SingleTickerProviderStateM
           ? const Center(child: CircularProgressIndicator())
           : TabBarView(
               controller: _tabController,
+              // Ordem que você pediu
               children: [
-                // --- TELAS REORDENADAS ---
-                const TelaForumGlobal(), // <<< AGORA É A PRIMEIRA
                 const TelaChatsLista(),
-                _buildSearchTab(currentUserProfile),
                 UserListView(userIds: currentUserProfile.followerIds, currentUserProfile: currentUserProfile),
                 UserListView(userIds: currentUserProfile.followingIds, currentUserProfile: currentUserProfile),
                 _buildHubInvitesTab(),
+                _buildSearchTab(currentUserProfile),
               ],
             ),
     );
   }
 
   Widget _buildSearchTab(UserModel currentUserProfile) {
+    // (Esta função permanece a mesma)
     return Column(
       children: [
         Padding(
@@ -137,6 +137,7 @@ class _TelaSocialState extends State<TelaSocial> with SingleTickerProviderStateM
   }
 
   Widget _buildHubInvitesTab() {
+    // (Esta função permanece a mesma)
     return StreamBuilder<List<Map<String, dynamic>>>( 
       stream: _hubService.getReceivedHubInvitesStream(_currentUserId),
       builder: (context, snapshot) {

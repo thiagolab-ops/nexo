@@ -1,10 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-// --- CORREÇÃO: Importando o pacote com o nome correto ---
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 // --- MODELOS DE POST E COMMENT ---
-// (O resto do arquivo está 100% correto e permanece o mesmo)
-
 class Post {
   final String id;
   final String authorId;
@@ -88,7 +85,8 @@ class Comment {
 }
 
 // --- OUTROS MODELOS ---
-
+// (ReportModel, ProfessorStats, NotificationModel, HubEvent)
+// ... (nenhuma mudança nessas classes) ...
 class ReportModel {
   final String id;
   final String reporterId;
@@ -248,6 +246,7 @@ class HubEvent {
   }
 }
 
+
 class UserModel {
   final String id;
   final String username;
@@ -265,6 +264,7 @@ class UserModel {
   final Timestamp lastStudyDate;
   final String role;
   final bool hasCompletedOnboarding;
+  final int unreadNotificationCount;
 
   UserModel({
     required this.id,
@@ -283,6 +283,7 @@ class UserModel {
     required this.lastStudyDate,
     this.role = 'student',
     this.hasCompletedOnboarding = false,
+    this.unreadNotificationCount = 0,
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) {
@@ -304,6 +305,7 @@ class UserModel {
       lastStudyDate: data['lastStudyDate'] ?? data['createdAt'] ?? Timestamp.now(),
       role: data['role'] ?? 'student',
       hasCompletedOnboarding: data['hasCompletedOnboarding'] ?? false,
+      unreadNotificationCount: data['unreadNotificationCount'] ?? 0,
     );
   }
 
@@ -318,6 +320,7 @@ class UserModel {
       'lastStudyDate': lastStudyDate,
       'role': role,
       'hasCompletedOnboarding': hasCompletedOnboarding,
+      'unreadNotificationCount': unreadNotificationCount,
     };
   }
 }
@@ -636,7 +639,7 @@ class AgendaEvent {
   } 
 }
 
-class VideoNexo {
+class VideoNexo { // (Arquivo)
   String id;
   final String ownerId;
   String title;
@@ -657,7 +660,6 @@ class VideoNexo {
 
   String get thumbnailUrl {
     if (videoUrl.contains('youtube.com') || videoUrl.contains('youtu.be')) {
-      // --- CORREÇÃO AQUI ---
       final videoId = YoutubePlayerController.convertUrlToId(videoUrl);
       if (videoId != null && videoId.isNotEmpty) {
         return 'https://img.youtube.com/vi/$videoId/0.jpg';
@@ -691,7 +693,7 @@ class VideoNexo {
   }
 }
 
-class Curso {
+class Curso { // (Curso)
   final String id;
   final String ownerId;
   String title;
@@ -748,12 +750,14 @@ class Curso {
   }
 }
 
+// --- MODELO LESSON ATUALIZADO ---
 class Lesson {
   final String id;
   String title;
   String videoUrl;
   int orderIndex;
   final Timestamp createdAt;
+  bool completed; // <<< CAMPO ADICIONADO (do seu protótipo)
 
   Lesson({
     required this.id,
@@ -761,11 +765,11 @@ class Lesson {
     required this.videoUrl,
     required this.orderIndex,
     required this.createdAt,
+    this.completed = false, // <<< ADICIONADO
   });
   
   String get thumbnailUrl {
     if (videoUrl.contains('youtube.com') || videoUrl.contains('youtu.be')) {
-      // --- CORREÇÃO AQUI ---
       final videoId = YoutubePlayerController.convertUrlToId(videoUrl);
       if (videoId != null && videoId.isNotEmpty) {
         return 'https://img.youtube.com/vi/$videoId/0.jpg';
@@ -780,6 +784,7 @@ class Lesson {
       'videoUrl': videoUrl,
       'orderIndex': orderIndex,
       'createdAt': createdAt,
+      'completed': completed, // <<< ADICIONADO
     };
   }
 
@@ -790,6 +795,48 @@ class Lesson {
       title: data['title'] ?? '',
       videoUrl: data['videoUrl'] ?? '',
       orderIndex: data['orderIndex'] ?? 0,
+      createdAt: data['createdAt'] ?? Timestamp.now(),
+      completed: data['completed'] ?? false, // <<< ADICIONADO
+    );
+  }
+}
+
+// --- NOVO MODELO PARA COMENTÁRIOS DE AULA ---
+class LessonComment {
+  final String id;
+  final String authorId;
+  final String authorUsername;
+  final String authorPhotoUrl;
+  final String text;
+  final Timestamp createdAt;
+
+  LessonComment({
+    required this.id,
+    required this.authorId,
+    required this.authorUsername,
+    required this.authorPhotoUrl,
+    required this.text,
+    required this.createdAt,
+  });
+
+   Map<String, dynamic> toMap() {
+    return {
+      'authorId': authorId,
+      'authorUsername': authorUsername,
+      'authorPhotoUrl': authorPhotoUrl,
+      'text': text,
+      'createdAt': createdAt,
+    };
+  }
+
+  factory LessonComment.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data()!;
+    return LessonComment(
+      id: doc.id,
+      authorId: data['authorId'] ?? '',
+      authorUsername: data['authorUsername'] ?? '',
+      authorPhotoUrl: data['authorPhotoUrl'] ?? '',
+      text: data['text'] ?? '',
       createdAt: data['createdAt'] ?? Timestamp.now(),
     );
   }

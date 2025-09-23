@@ -7,13 +7,6 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
 
-    function isMemberOfHub(hubId) {
-      // Esta função estava errada no seu dump original, ela não checava a associação.
-      // A regra correta (que usamos) é checar diretamente.
-      // Vou manter a função aqui caso seja usada em outro lugar, mas ela é falha.
-      return get(/databases/$(database)/documents/hubs/$(hubId)).data.memberIds;
-    }
-
     function isProfessor(userId) {
       return get(/databases/$(database)/documents/users/$(userId)).data.role == 'professor';
     }
@@ -30,17 +23,14 @@ service cloud.firestore {
 
       // --- REGRAS DE SUBCOLEÇÃO REESCRITAS ---
       
-      // Notificações (Privado)
       match /notifications/{notificationId} {
         allow read, write: if isOwner(userId);
       }
       
-      // Estatísticas (Privado)
       match /professor_stats/{statId} {
         allow read: if isOwner(userId);
       }
       
-      // Baralhos Pessoais (Privado)
       match /baralhos/{baralhoId} {
         allow read, write, delete: if isOwner(userId);
         match /cards/{cardId} {
@@ -48,28 +38,23 @@ service cloud.firestore {
         }
       }
       
-      // Documentos Pessoais (Privado)
       match /nexo_pad_documents/{docId} {
          allow read, write, delete: if isOwner(userId);
       }
       
-      // Quizzes Pessoais (Privado)
       match /quizzes/{quizId} {
         allow read, write, delete: if isOwner(userId);
       }
 
       // --- CONTEÚDO PÚBLICO DO PROFESSOR ---
       
-      // Videoteca (Público para Leitura)
       match /videoteca/{videoId} {
-        allow read: if request.auth != null; // Qualquer um logado pode ler
-        allow write, delete: if isOwner(userId); // Apenas o dono pode modificar
+        allow read: if request.auth != null;
+        allow write, delete: if isOwner(userId);
       }
       
-      // Cursos (Público para Leitura)
       match /cursos/{cursoId} {
         allow read: if request.auth != null;
-        // Permite donos escreverem E alunos logados avaliarem (update)
         allow write, delete: if isOwner(userId);
         allow update: if request.auth != null 
                       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ratings']);
@@ -77,13 +62,17 @@ service cloud.firestore {
         match /lessons/{lessonId} {
           allow read: if request.auth != null;
           allow write, delete: if isOwner(userId);
+
+          // --- NOVAS REGRAS DE COMENTÁRIOS DE AULA ---
+          match /comments/{commentId} {
+            allow read: if request.auth != null;
+            // Permite criar se o usuário for o autor
+            allow create: if request.auth.uid == request.resource.data.authorId;
+            // (Apenas o autor do comentário pode editar/deletar)
+            allow update, delete: if request.auth.uid == resource.data.authorId;
+          }
         }
       }
-      
-      // A regra coringa genérica foi removida pois era muito restritiva e insegura
-      // match /{document=**} {
-      //   allow read, write, delete: if isOwner(userId);
-      // }
     }
 
     match /posts/{postId} {
@@ -106,7 +95,6 @@ service cloud.firestore {
       allow update: if request.auth.uid in get(/databases/$(database)/documents/hubs/$(hubId)).data.memberIds;
       allow delete: if request.auth.uid == resource.data.ownerId; 
 
-      // Regra de Subcoleção do Hub (Fóruns, Documentos, etc.)
       match /{document=**} { 
         allow read, write, delete: if request.auth.uid in get(/databases/$(database)/documents/hubs/$(hubId)).data.memberIds;
       }

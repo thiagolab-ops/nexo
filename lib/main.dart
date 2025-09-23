@@ -3,8 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:nexo/nexo_theme.dart'; // <<< ARQUIVO DE TEMA IMPORTADO
+import 'package:nexo/nexo_theme.dart'; 
 import 'package:nexo/screens/tela_baralhos_lista.dart'; 
+import 'package:nexo/screens/tela_daxu_chan.dart'; 
 import 'package:nexo/screens/tela_notificacoes.dart';
 import 'package:nexo/screens/tela_perfil.dart';
 import 'package:nexo/services/chat_service.dart';
@@ -15,7 +16,7 @@ import 'package:nexo/services/nexo_hub_service.dart';
 import 'package:nexo/services/notification_service.dart';
 import 'package:nexo/services/quiz_service.dart';
 import 'package:nexo/services/report_service.dart';
-import 'package:nexo/services/theme_provider.dart'; // <<< PROVIDER DE TEMA IMPORTADO
+import 'package:nexo/services/theme_provider.dart'; 
 import 'package:provider/provider.dart';
 import 'package:nexo/screens/tela_feed.dart';
 
@@ -28,7 +29,7 @@ import 'screens/tela_criar_post.dart';
 import 'screens/tela_hubs_lista.dart';
 import 'screens/tela_nexo_pad_lista.dart';
 import 'screens/tela_play_lista.dart'; 
-import 'screens/tela_social.dart';
+import 'screens/tela_social_nova.dart'; 
 import 'screens/tela_nexo_pad.dart';
 import 'widgets/user_avatar.dart';
 
@@ -63,9 +64,7 @@ class MyApp extends StatelessWidget {
         builder: (context, user, _) {
           return MultiProvider(
             providers: [
-              // --- PROVIDER DE TEMA ADICIONADO ---
               ChangeNotifierProvider(create: (_) => ThemeProvider()),
-              
               Provider<ProfileService>(create: (_) => ProfileService()),
               Provider<NotificationService>(create: (_) => NotificationService()),
               Provider<NexoPadService>(create: (_) => NexoPadService()),
@@ -83,20 +82,16 @@ class MyApp extends StatelessWidget {
                   initialData: null,
                 )
             ],
-            // --- CONSUMIDOR DE TEMA ADICIONADO ---
             child: Consumer<ThemeProvider>(
               builder: (context, themeProvider, child) {
                 return MaterialApp(
                   localizationsDelegates: context.localizationDelegates,
                   supportedLocales: context.supportedLocales,
                   locale: context.locale,
-                  title: 'Nexo',
-                  
-                  // --- TEMAS CONECTADOS ---
-                  theme: NexoTheme.light,       // Nosso novo tema claro
-                  darkTheme: NexoTheme.dark,      // Nosso tema escuro existente
-                  themeMode: themeProvider.themeMode, // O provider decide qual mostrar
-                  
+                  title: 'Daxu', 
+                  theme: NexoTheme.light,
+                  darkTheme: NexoTheme.dark,
+                  themeMode: themeProvider.themeMode,
                   home: const AuthGate(),
                   debugShowCheckedModeBanner: false,
                 );
@@ -108,9 +103,6 @@ class MyApp extends StatelessWidget {
     );
   }
 }
-
-// --- NENHUMA MUDANÇA ABAIXO DAQUI ---
-// (O resto do arquivo permanece o mesmo)
 
 class TelaPrincipal extends StatefulWidget {
   const TelaPrincipal({super.key});
@@ -131,13 +123,15 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
       TelaBaralhosLista(showNewDeckDialog: _mostrarDialogoNovoBaralho), 
       const TelaHubsLista(),
       const TelaNexoPadLista(),
-      const TelaSocial(),
+      const TelaDaxuChan(), 
       const TelaFeed(),
       const TelaPlayLista(),
+      const TelaSocialNova(), 
     ];
   }
 
   void _mostrarDialogoNovoBaralho({Baralho? baralhoExistente}) {
+    // ... (código do diálogo sem mudanças)
     final nomeController = TextEditingController(text: baralhoExistente?.nome);
     showDialog(
       context: context,
@@ -178,6 +172,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
   }
 
   void _showCreateHubDialog() {
+    // ... (código do diálogo sem mudanças)
     final nameController = TextEditingController();
     final descriptionController = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -237,8 +232,9 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
   }
 
   Widget? _buildFloatingActionButton(BuildContext context, UserModel userProfile) {
+    // ... (código do FAB sem mudanças)
     switch (_indiceAtual) {
-      case 0: // Aba Baralhos
+      case 0: 
         return FloatingActionButton(
           heroTag: 'add_deck',
           onPressed: () => _mostrarDialogoNovoBaralho(),
@@ -246,7 +242,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
           child: const Icon(Icons.add),
         );
         
-      case 1: // Aba Hubs
+      case 1: 
         return FloatingActionButton(
           heroTag: 'add_hub',
           onPressed: _showCreateHubDialog,
@@ -254,7 +250,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
           child: const Icon(Icons.add),
         );
 
-      case 2: // Aba Nexo Pad
+      case 2: 
         return FloatingActionButton(
           heroTag: 'add_document',
           onPressed: () async {
@@ -269,7 +265,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
           tooltip: 'Novo Documento',
           child: const Icon(Icons.add),
         );
-      case 4: // Aba Feed (só para professores)
+      case 4: 
         if (userProfile.role == 'professor') {
           return FloatingActionButton(
             heroTag: 'add_post',
@@ -292,7 +288,6 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
   @override
   Widget build(BuildContext context) {
     final userProfile = Provider.of<UserModel?>(context);
-    final userId = FirebaseAuth.instance.currentUser!.uid;
 
     if (userProfile == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -300,12 +295,12 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('NEXO', style: GoogleFonts.pressStart2p(fontSize: 20)),
+        // --- LOGO ATUALIZADO PARA MAIÚSCULO ---
+        title: Text('DAXU', style: GoogleFonts.pressStart2p(fontSize: 20)),
         actions: [
-          StreamBuilder<int>(
-            stream: context.read<NotificationService>().getUnreadNotificationCountStream(userId),
-            builder: (context, notificationSnapshot) {
-              final unreadCount = notificationSnapshot.data ?? 0;
+          Builder(
+            builder: (context) {
+              final unreadCount = userProfile.unreadNotificationCount;
               return Stack(
                 alignment: Alignment.center,
                 children: [
@@ -328,7 +323,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                     ),
                 ],
               );
-            },
+            }
           ),
           IconButton(
             tooltip: 'editProfileTooltip'.tr(),
@@ -353,7 +348,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
       ),
       body: IndexedStack(
         index: _indiceAtual,
-        children: _telas, 
+        children: _telas,
       ),
       floatingActionButton: _buildFloatingActionButton(context, userProfile), 
       bottomNavigationBar: BottomNavigationBar(
@@ -361,12 +356,14 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
         onTap: (indice) => setState(() => _indiceAtual = indice),
         type: BottomNavigationBarType.fixed,
         items: [
-          BottomNavigationBarItem(icon: const Icon(Icons.style), label: 'card_label'.tr()),
-          BottomNavigationBarItem(icon: const Icon(Icons.group_work), label: 'hub_label'.tr()),
-          BottomNavigationBarItem(icon: const Icon(Icons.edit_document), label: 'pad_label'.tr()),
-          BottomNavigationBarItem(icon: const Icon(Icons.people_alt), label: 'chan_label'.tr()),
-          BottomNavigationBarItem(icon: const Icon(Icons.dynamic_feed), label: 'feed_label'.tr()),
-          BottomNavigationBarItem(icon: const Icon(Icons.videogame_asset_outlined), label: 'play_label'.tr()),
+          // --- ATUALIZADO PARA 7 ABAS COM AS LABELS NOVAS ---
+          BottomNavigationBarItem(icon: const Icon(Icons.style), label: 'card_label'.tr()), // Daxu Card
+          BottomNavigationBarItem(icon: const Icon(Icons.group_work), label: 'hub_label'.tr()), // Daxu Hub
+          BottomNavigationBarItem(icon: const Icon(Icons.edit_document), label: 'pad_label'.tr()), // Daxu Pad
+          BottomNavigationBarItem(icon: const Icon(Icons.forum_outlined), label: 'chan_label'.tr()), // Daxu Chan
+          BottomNavigationBarItem(icon: const Icon(Icons.dynamic_feed), label: 'feed_label'.tr()), // Daxu Feed
+          BottomNavigationBarItem(icon: const Icon(Icons.videogame_asset_outlined), label: 'play_label'.tr()), // Daxu Play
+          BottomNavigationBarItem(icon: const Icon(Icons.people_alt_outlined), label: 'social_label'.tr()), // Social
         ],
       ),
     );

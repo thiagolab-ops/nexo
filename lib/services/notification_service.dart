@@ -18,6 +18,7 @@ class NotificationService {
     });
   }
 
+  // ESTA FUNÇÃO NÃO SERÁ MAIS USADA PELO APP BAR, MAS PODE SER ÚTIL
   Stream<int> getUnreadNotificationCountStream(String userId) {
     return _firestore
         .collection('users')
@@ -29,6 +30,8 @@ class NotificationService {
   }
 
   Future<void> markNotificationAsRead(String userId, String notificationId) async {
+    // Esta função agora também pode decrementar o contador, mas vamos deixar
+    // o "markAll" cuidar disso para economizar escritas.
     await _firestore
         .collection('users')
         .doc(userId)
@@ -37,12 +40,11 @@ class NotificationService {
         .update({'isRead': true});
   }
 
-  // --- NOVA FUNÇÃO ADICIONADA ---
+  // --- FUNÇÃO ATUALIZADA ---
   Future<void> markAllNotificationsAsRead(String userId) async {
-    // 1. Encontra todos os documentos não lidos
-    final querySnapshot = await _firestore
-        .collection('users')
-        .doc(userId)
+    final userRef = _firestore.collection('users').doc(userId);
+    
+    final querySnapshot = await userRef
         .collection('notifications')
         .where('isRead', isEqualTo: false)
         .get();
@@ -51,13 +53,16 @@ class NotificationService {
       return; // Nada para marcar
     }
 
-    // 2. Cria uma operação em lote (batch) para eficiência
     final batch = _firestore.batch();
     for (final doc in querySnapshot.docs) {
       batch.update(doc.reference, {'isRead': true});
     }
     
-    // 3. Executa todas as atualizações de uma vez
+    // --- LÓGICA DE RESET ADICIONADA ---
+    // Adiciona a operação de resetar o contador no perfil do usuário ao batch
+    batch.update(userRef, {'unreadNotificationCount': 0});
+    // --- FIM DA LÓGICA ---
+    
     await batch.commit();
   }
 }

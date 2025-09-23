@@ -164,6 +164,15 @@ class FirestoreService {
        );
   }
   
+  // <<< NOVA REFERÊNCIA PARA COMENTÁRIOS DA AULA >>>
+  CollectionReference<LessonComment> _lessonCommentsRef(String userId, String cursoId, String lessonId) {
+     return _lessonsRef(userId, cursoId).doc(lessonId).collection('comments')
+       .withConverter<LessonComment>(
+         fromFirestore: (doc, _) => LessonComment.fromFirestore(doc),
+         toFirestore: (comment, _) => comment.toMap(),
+       );
+  }
+
   // --- Funções de CURSO ---
   
   Future<DocumentReference<Curso>> createCurso(Curso curso) async {
@@ -177,7 +186,6 @@ class FirestoreService {
         .map((snap) => snap.docs.map((doc) => doc.data()).toList());
   }
 
-  // <<< FUNÇÃO QUE FALTAVA ADICIONADA AQUI >>>
   Stream<DocumentSnapshot<Curso>> getCursoStream(String userId, String cursoId) {
     return _cursosRef(userId).doc(cursoId).snapshots();
   }
@@ -201,7 +209,7 @@ class FirestoreService {
   
   Stream<List<Lesson>> streamLessons(String userId, String cursoId) {
     return _lessonsRef(userId, cursoId)
-        .orderBy('orderIndex')
+        .orderBy('orderIndex') 
         .snapshots()
         .map((snap) => snap.docs.map((doc) => doc.data()).toList());
   }
@@ -225,5 +233,17 @@ class FirestoreService {
       batch.update(lessonRef, {'orderIndex': i});
     }
     await batch.commit();
+  }
+
+  // <<< NOVAS FUNÇÕES DE COMENTÁRIOS DE AULA >>>
+  Stream<List<LessonComment>> streamLessonComments(String userId, String cursoId, String lessonId) {
+    return _lessonCommentsRef(userId, cursoId, lessonId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map((doc) => doc.data()).toList());
+  }
+
+  Future<void> addLessonComment(String userId, String cursoId, String lessonId, LessonComment comment) async {
+    await _lessonCommentsRef(userId, cursoId, lessonId).add(comment);
   }
 }
