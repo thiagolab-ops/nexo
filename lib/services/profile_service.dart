@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart';
 import '../models/models.dart';
 
 class ProfileService {
@@ -12,14 +11,12 @@ class ProfileService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(region: 'us-central1');
 
-  // --- MÉTODOS PARA TESTES ---
   void setFirestoreForTests(FirebaseFirestore firestore) {
     _db = firestore;
   }
-  void setAuthForTests(FirebaseAuth auth) {
+   void setAuthForTests(FirebaseAuth auth) {
     _auth = auth;
   }
-  // --- FIM DOS MÉTODOS PARA TESTES ---
   
   CollectionReference<UserModel> get _usersRef => 
       _db.collection('users').withConverter<UserModel>(
@@ -27,11 +24,12 @@ class ProfileService {
         toFirestore: (user, _) => user.toMap(),
       );
 
-  // --- NOVOS MÉTODOS ADICIONADOS ---
-
+  // --- MÉTODOS REINTEGRADOS PARA A TELA DE ESTUDO ---
+  
   /// Adiciona uma quantidade de XP ao perfil do usuário.
   Future<void> addXp(String userId, int amount) async {
     if (amount <= 0) return;
+    // Usa FieldValue.increment para uma operação atômica e segura
     await _usersRef.doc(userId).update({'xp': FieldValue.increment(amount)});
   }
 
@@ -41,10 +39,16 @@ class ProfileService {
     if (!userDoc.exists) return;
 
     final user = userDoc.data()!;
-    final now = DateTime.now();
-    final lastStudy = user.lastStudyDate.toDate();
+    // Garante que o UserModel tenha o campo lastStudyDate
+    if (user.lastStudyDate == null) return; 
 
-    final difference = now.difference(lastStudy).inDays;
+    final now = DateTime.now();
+    final lastStudy = user.lastStudyDate!.toDate();
+    
+    // Calcula a diferença em dias ignorando as horas
+    final difference = DateTime(now.year, now.month, now.day)
+        .difference(DateTime(lastStudy.year, lastStudy.month, lastStudy.day))
+        .inDays;
     
     // Se o último estudo foi ontem, incrementa o streak.
     if (difference == 1) {
@@ -55,7 +59,6 @@ class ProfileService {
     } 
     // Se o último estudo foi hoje, não faz nada.
     else if (difference == 0) {
-      // Já estudou hoje, não precisa atualizar.
       return;
     }
     // Se faz mais de um dia que não estuda, reseta o streak para 1.
@@ -67,7 +70,7 @@ class ProfileService {
     }
   }
 
-  // --- FIM DOS NOVOS MÉTODOS ---
+  // --- FIM DOS MÉTODOS REINTEGRADOS ---
 
   Stream<ProfessorStats?> getProfessorStatsStream(String userId) {
     return _db.collection('users').doc(userId).collection('professor_stats').doc('summary').snapshots()
@@ -114,13 +117,13 @@ class ProfileService {
       username: username,
       email: email,
       bio: bio,
-      photoUrl: '', // Começa sem foto
+      photoUrl: '',
       createdAt: Timestamp.now(),
       lastStudyDate: Timestamp.now(),
       hasCompletedOnboarding: true,
-      // Agora os campos xp e studyStreak existem no UserModel
-      studyStreak: 0,
+      // Garante que os campos existam na criação do usuário
       xp: 0,
+      studyStreak: 0,
     );
     await _usersRef.doc(uid).set(newUser);
   }
@@ -151,8 +154,8 @@ class ProfileService {
   Future<List<UserModel>> getBlockedUsers(String userId) async {
     final userDoc = await _usersRef.doc(userId).get();
     final user = userDoc.data();
-    if (user != null && user.blockedUserIds.isNotEmpty) {
-      return getUsersFromIdList(user.blockedUserIds);
+    if (user != null && user.blockedUserIds != null && user.blockedUserIds!.isNotEmpty) {
+      return getUsersFromIdList(user.blockedUserIds!);
     }
     return [];
   }
@@ -160,10 +163,9 @@ class ProfileService {
   Future<void> blockUser(String currentUserId, String targetUserId) async {
     await _usersRef.doc(currentUserId).update({
       'blockedUserIds': FieldValue.arrayUnion([targetUserId]),
-      'followingIds': FieldValue.arrayRemove([targetUserId]), // Deixa de seguir
+      'followingIds': FieldValue.arrayRemove([targetUserId]),
       'followerIds': FieldValue.arrayRemove([targetUserId]),
     });
-    // Força o outro usuário a deixar de te seguir também
     await _usersRef.doc(targetUserId).update({
       'followingIds': FieldValue.arrayRemove([currentUserId]),
       'followerIds': FieldValue.arrayRemove([currentUserId]),
@@ -175,4 +177,22 @@ class ProfileService {
       'blockedUserIds': FieldValue.arrayRemove([targetUserId])
     });
   }
+
+  // --- FUNÇÃO "SOU PROFESSOR" ---
+  Future<void> applyToBeProfessor({
+    required String userId,
+    required String specialties,
+    required String socialLinks,
+  }) async {
+    final applicationData = {
+      'userId': userId,
+      'specialties': specialties,
+      'socialLinks': socialLinks,
+      'status': 'pending', // Fica pendente para sua aprovação manual
+      'createdAt': FieldValue.serverTimestamp(),
+    };
+    // Salva a aplicação em uma nova coleção
+    await _db.collection('professor_applications').doc(userId).set(applicationData);
+  }
+  // --- FIM DA FUNÇÃO ---
 }

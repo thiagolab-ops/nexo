@@ -4,8 +4,16 @@ import 'package:nexo/models/models.dart';
 import 'package:nexo/services/profile_service.dart';
 
 class NexoHubService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  
+  final FirebaseFirestore _firestore;
+  // --- CORREÇÃO: ProfileService agora é uma dependência injetada ---
+  final ProfileService _profileService;
+
+  NexoHubService({
+    FirebaseFirestore? firestore,
+    ProfileService? profileService,
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _profileService = profileService ?? ProfileService();
+
   String get _currentUserId {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -27,11 +35,12 @@ class NexoHubService {
           );
           
   Future<void> createHub({required String name, String? description}) async {
-    final userProfile = await ProfileService().getUserProfile(_currentUserId);
+    // --- CORREÇÃO: Usa a instância _profileService ---
+    final userProfile = await _profileService.getUserProfile(_currentUserId);
     if (userProfile == null) return;
 
     final newHubRef = _hubsRef.doc();
-    final newChatRoomRef = _chatRoomsRef.doc(newHubRef.id); // Modificado para usar a ref com converter
+    final newChatRoomRef = _chatRoomsRef.doc(newHubRef.id);
 
     final newHub = NexoHub(
       id: newHubRef.id,
@@ -57,8 +66,28 @@ class NexoHubService {
 
     final batch = _firestore.batch();
     batch.set(newHubRef, newHub);
-    batch.set(newChatRoomRef, newChatRoom); // Modificado para setar o objeto ChatRoom
+    batch.set(newChatRoomRef, newChatRoom);
     await batch.commit();
+  }
+  
+  // --- NOVA FUNÇÃO DE CONVITE (sem alterações, já estava boa) ---
+  Future<void> sendHubInvite({
+    required String hubId,
+    required String hubName,
+    required String fromUserId,
+    required String fromUsername,
+    required UserModel toUser,
+  }) async {
+    await _firestore.collection('hub_invites').add({
+      'hubId': hubId,
+      'hubName': hubName,
+      'fromUserId': fromUserId,
+      'fromUsername': fromUsername,
+      'toUserId': toUser.id,
+      'toUsername': toUser.username,
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 
   Future<NexoHub?> getHubById(String hubId) async {
@@ -69,10 +98,9 @@ class NexoHubService {
   Future<List<UserModel>> getHubMembers(String hubId) async {
     final hub = await getHubById(hubId);
     if (hub == null || hub.memberIds.isEmpty) return [];
-    return await ProfileService().getUsersFromIdList(hub.memberIds);
+    // --- CORREÇÃO: Usa a instância _profileService ---
+    return await _profileService.getUsersFromIdList(hub.memberIds);
   }
-
-  // --- Funções da Agenda ---
 
   Stream<List<HubEvent>> getEventsStream(String hubId) {
     return _hubsRef
@@ -87,18 +115,13 @@ class NexoHubService {
         .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
   }
 
-  Future<void> addEventToHub(
-    String hubId, {
-    required String title,
-    required DateTime date,
-    String? meetLink,
-    String? audience,
-  }) async {
-    final userProfile = await ProfileService().getUserProfile(_currentUserId);
+  Future<void> addEventToHub(String hubId, { required String title, required DateTime date, String? meetLink, String? audience, }) async {
+    // --- CORREÇÃO: Usa a instância _profileService ---
+    final userProfile = await _profileService.getUserProfile(_currentUserId);
     if (userProfile == null) return;
     
     final newEvent = HubEvent(
-      id: '', // Firestore will generate
+      id: '',
       title: title,
       date: date,
       creatorId: userProfile.id,
@@ -118,49 +141,27 @@ class NexoHubService {
     await _hubsRef.doc(hubId).collection('events').doc(eventId).delete();
   }
 
-  Future<void> rsvpToEvent({
-    required String hubId,
-    required String eventId,
-    required String userId,
-    required bool isAttending,
-  }) async {
+  Future<void> rsvpToEvent({ required String hubId, required String eventId, required String userId, required bool isAttending, }) async {
     final eventRef = _hubsRef.doc(hubId).collection('events').doc(eventId);
 
     if (isAttending) {
-      await eventRef.update({
-        'attendees': FieldValue.arrayUnion([userId])
-      });
+      await eventRef.update({ 'attendees': FieldValue.arrayUnion([userId]) });
     } else {
-      await eventRef.update({
-        'attendees': FieldValue.arrayRemove([userId])
-      });
+      await eventRef.update({ 'attendees': FieldValue.arrayRemove([userId]) });
     }
   }
   
-  // --- FIM FUNÇÕES AGENDA ---
-  
-  // --- NOVA FUNÇÃO DE DELETAR HUB ---
   Future<void> deleteHub(String hubId, String ownerId) async {
-    // Verificação de segurança do lado do cliente (a regra do Firestore é a final)
     if (_currentUserId != ownerId) {
       throw Exception('Apenas o dono pode deletar um hub.');
     }
-
-    // Deleta o Hub e a Sala de Chat principal atomicamente
     final batch = _firestore.batch();
     final hubRef = _hubsRef.doc(hubId);
-    final chatRef = _chatRoomsRef.doc(hubId); // Usando a ref com converter
-    
+    final chatRef = _chatRoomsRef.doc(hubId);
     batch.delete(hubRef);
     batch.delete(chatRef);
-    
     await batch.commit();
-    
-    // NOTA: Isso NÃO deleta subcoleções (como docs, decks, eventos, quizzes, mensagens).
-    // Isso requer uma Cloud Function "recursive delete", que é um item para a Fase 7 (Manutenção).
-    // Por agora, isso remove o Hub da lista e resolve o bug do chat órfão.
   }
-  // --- FIM DA NOVA FUNÇÃO ---
 
   Stream<List<NexoHub>> getHubsForCurrentUser() {
     final user = FirebaseAuth.instance.currentUser;
@@ -176,15 +177,11 @@ class NexoHubService {
     if (baralho.id == null) return;
     final deckRef = _firestore.collection('hubs').doc(hubId).collection('decks').doc(baralho.id);
     final cardsRef = deckRef.collection('cards');
-    
     final batch = _firestore.batch();
-    
     final sharedDeckData = baralho.toMap();
     sharedDeckData['originalOwnerId'] = baralho.ownerId; 
     sharedDeckData['sharedAt'] = FieldValue.serverTimestamp();
-    
     batch.set(deckRef, sharedDeckData);
-
     for (final card in cards) {
       batch.set(cardsRef.doc(), card.toMap());
     }
@@ -257,12 +254,7 @@ class NexoHubService {
         .map((snapshot) => snapshot.docs.map((doc) => Quiz.fromFirestore(doc)).toList());
   }
 
-  Future<NexoPadDocument> createSharedDocumentInHub({
-    required String hubId,
-    required String title,
-    required String ownerId,
-    String? initialContentJson,
-  }) async {
+  Future<NexoPadDocument> createSharedDocumentInHub({ required String hubId, required String title, required String ownerId, String? initialContentJson, }) async {
     final newDocRef = _firestore.collection('hubs').doc(hubId).collection('documents').doc();
     final newDoc = NexoPadDocument(
       id: newDocRef.id,

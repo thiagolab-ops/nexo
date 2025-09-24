@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class TelaLogin extends StatefulWidget {
@@ -12,9 +13,7 @@ class TelaLogin extends StatefulWidget {
 class _TelaLoginState extends State<TelaLogin> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   
-  // O GoogleSignIn agora está inicializado com a sua chave.
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    // <-- SEU ID FOI INSERIDO AQUI
     clientId: '1008883723814-3a1v2emqdpj9j420pf4f4luc84hq2euj.apps.googleusercontent.com',
   );
 
@@ -22,7 +21,6 @@ class _TelaLoginState extends State<TelaLogin> {
     try {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
-        // O usuário cancelou o login
         return;
       }
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
@@ -31,7 +29,6 @@ class _TelaLoginState extends State<TelaLogin> {
         idToken: googleAuth.idToken,
       );
       await _auth.signInWithCredential(credential);
-      // A navegação para a tela principal será tratada pelo AuthGate.
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -49,7 +46,8 @@ class _TelaLoginState extends State<TelaLogin> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('NEXO', style: TextStyle(fontFamily: 'PressStart2P', fontSize: 48, color: Colors.white)),
+            // --- NOME ATUALIZADO AQUI ---
+            Text('DAXU', style: GoogleFonts.pressStart2p(fontSize: 48, color: Colors.white)),
             const SizedBox(height: 50),
             ElevatedButton.icon(
               icon: Image.asset('assets/images/google_logo.png', height: 24.0),

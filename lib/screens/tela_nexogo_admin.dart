@@ -4,11 +4,9 @@ import 'package:nexo/models/models.dart';
 import 'package:nexo/screens/tela_nexogo_arquivo_form.dart';
 import 'package:nexo/screens/tela_nexogo_curso_detalhe.dart';
 import 'package:nexo/screens/tela_nexogo_curso_form.dart';
-import 'package:nexo/screens/tela_video_player_generica.dart'; // <<< IMPORTADO
+import 'package:nexo/screens/tela_video_player_generica.dart';
 import 'package:nexo/services/firestore_service.dart';
 import 'package:provider/provider.dart';
-// url_launcher não é mais necessário aqui
-// import 'package:url_launcher/url_launcher.dart'; 
 
 class TelaNexoGoAdmin extends StatefulWidget {
   const TelaNexoGoAdmin({super.key});
@@ -26,11 +24,17 @@ class _TelaNexoGoAdminState extends State<TelaNexoGoAdmin> with SingleTickerProv
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() => setState(() {}));
     _firestoreService = context.read<FirestoreService>();
     _currentUserId = FirebaseAuth.instance.currentUser!.uid;
   }
   
-  // (Funções de deletar permanecem iguais)
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
   void _showDeleteVideoDialog(VideoNexo video) async {
      final bool? confirm = await showDialog(
       context: context,
@@ -75,35 +79,35 @@ class _TelaNexoGoAdminState extends State<TelaNexoGoAdmin> with SingleTickerProv
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Meu Nexo Go'),
+        title: const Text('Meu Daxu Go'),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
-            Tab(icon: Icon(Icons.video_collection_outlined), text: 'ARQUIVOS'),
             Tab(icon: Icon(Icons.school_outlined), text: 'CURSOS'),
+            Tab(icon: Icon(Icons.video_collection_outlined), text: 'VÍDEOS'), // <<< NOME ATUALIZADO
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildArquivosList(),
           _buildCursosList(),
+          _buildArquivosList(), // Trocado a ordem para combinar com a TabBar
         ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           if (_tabController.index == 0) {
-            Navigator.of(context).push(MaterialPageRoute(
-              builder: (context) => const TelaNexoGoArquivoForm(),
+             Navigator.of(context).push(MaterialPageRoute(
+              builder: (context) => const TelaNexoGoCursoForm(),
             ));
           } else {
-            Navigator.of(context).push(MaterialPageRoute(
-              builder: (context) => const TelaNexoGoCursoForm(),
+             Navigator.of(context).push(MaterialPageRoute(
+              builder: (context) => const TelaNexoGoArquivoForm(),
             ));
           }
         },
-        tooltip: _tabController.index == 0 ? 'Adicionar Vídeo' : 'Adicionar Curso',
+        tooltip: _tabController.index == 0 ? 'Adicionar Curso' : 'Adicionar Vídeo',
         child: const Icon(Icons.add),
       ),
     );
@@ -114,7 +118,7 @@ class _TelaNexoGoAdminState extends State<TelaNexoGoAdmin> with SingleTickerProv
       stream: _firestoreService.streamVideos(_currentUserId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('Nenhum vídeo no arquivo.'));
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('Nenhum vídeo adicionado.'));
         
         final videos = snapshot.data!;
         return ListView.builder(
@@ -146,7 +150,6 @@ class _TelaNexoGoAdminState extends State<TelaNexoGoAdmin> with SingleTickerProv
                       ),
                   ],
                 ),
-                // --- ONTAP ATUALIZADO PARA O PLAYER GENÉRICO ---
                 onTap: () {
                    Navigator.of(context).push(MaterialPageRoute(
                       builder: (context) => TelaVideoPlayerGenerica(videoUrl: video.videoUrl, videoTitle: video.title),

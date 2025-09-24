@@ -6,10 +6,9 @@ import 'package:nexo/services/chat_service.dart';
 import 'package:nexo/services/nexo_hub_service.dart';
 import 'package:nexo/screens/tela_chat_mensagens.dart';
 import 'package:nexo/services/profile_service.dart';
-import 'package:nexo/widgets/forum_widget.dart'; // <<< WIDGET DO FÓRUM IMPORTADO
+import 'package:nexo/widgets/forum_widget.dart';
 import 'package:nexo/widgets/user_avatar.dart';
 import 'package:nexo/services/firestore_service.dart';
-import 'package:nexo/services/quiz_service.dart';
 import 'package:nexo/screens/tela_detalhe_baralho_compartilhado.dart';
 import 'package:nexo/screens/tela_nexo_pad.dart';
 import 'package:nexo/screens/tela_realizar_quiz.dart';
@@ -30,17 +29,16 @@ class TelaHubDetalhe extends StatefulWidget {
 class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final String _currentUserId = FirebaseAuth.instance.currentUser!.uid;
-  late UserModel _currentUserProfile;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance; // Instância do Firestore
+  UserModel? _currentUserProfile;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
   void initState() {
     super.initState();
-    _currentUserProfile = Provider.of<UserModel?>(context, listen: false)!;
-    // --- ATUALIZADO PARA 8 ABAS ---
+    _currentUserProfile = Provider.of<UserModel?>(context, listen: false);
     _tabController = TabController(length: 8, vsync: this);
     _tabController.addListener(() {
-      setState(() {}); 
+      if (mounted) setState(() {}); 
     });
   }
   
@@ -51,9 +49,11 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
   }
 
   Widget? _buildFloatingActionButton() {
+    if (_currentUserProfile == null) return null;
+
     switch (_tabController.index) {
       case 2: // Aba Agenda
-        if (_currentUserProfile.role == 'professor') {
+        if (_currentUserProfile!.role == 'professor') {
            return FloatingActionButton(
             heroTag: 'add_event',
             onPressed: () => _showCreateEventDialog(),
@@ -76,14 +76,13 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
           tooltip: 'Compartilhar Baralho Pessoal',
           child: const Icon(Icons.share),
         );
-      // O FÓRUM (INDEX 7) JÁ TEM SEU PRÓPRIO FAB INTERNO
       default: 
         return null;
     }
   }
 
-  // (Todas as outras funções de diálogo permanecem as mesmas...)
   void _showCreateEventDialog({HubEvent? eventToEdit}) {
+    if (_currentUserProfile == null) return;
     final isEditing = eventToEdit != null;
     final titleController = TextEditingController(text: isEditing ? eventToEdit.title : '');
     final linkController = TextEditingController();
@@ -105,7 +104,7 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
                     autofocus: true,
                     decoration: InputDecoration(labelText: isEditing ? 'Título do Evento' : 'Título do Evento/Aula'),
                   ),
-                  if (_currentUserProfile.role == 'professor' && !isEditing) ...[
+                  if (_currentUserProfile!.role == 'professor' && !isEditing) ...[
                     const SizedBox(height: 16),
                     TextField(
                       controller: linkController,
@@ -255,6 +254,14 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
+    // --- CORREÇÃO: VERIFICA SE O PERFIL DO USUÁRIO FOI CARREGADO ---
+    if (_currentUserProfile == null) {
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.hub.name)),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.hub.name),
@@ -262,7 +269,6 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true, 
-          // --- ATUALIZADO PARA 8 ABAS ---
           tabs: const [
             Tab(icon: Icon(Icons.info_outline), text: 'Sobre'),
             Tab(icon: Icon(Icons.people), text: 'Membros'),
@@ -271,13 +277,12 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
             Tab(icon: Icon(Icons.hub_outlined), text: 'Mapa'),
             Tab(icon: Icon(Icons.note_add), text: 'Docs'),
             Tab(icon: Icon(Icons.style), text: 'Baralhos'),
-            Tab(icon: Icon(Icons.forum), text: 'Fórum'), // <<< NOVA ABA ADICIONADA
+            Tab(icon: Icon(Icons.forum), text: 'Fórum'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        // --- ATUALIZADO PARA 8 TELAS ---
         children: [
           _SobreTab(description: widget.hub.description),
           _MembrosTab(hubId: widget.hub.id),
@@ -285,17 +290,15 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
             hubId: widget.hub.id,
             hubName: widget.hub.name,
             showEventDialog: _showCreateEventDialog,
-            currentUserProfile: _currentUserProfile,
+            currentUserProfile: _currentUserProfile!,
           ),
           _HubChatWrapper(hub: widget.hub),
           TelaMapaMental(hubId: widget.hub.id),
           _DocumentosTab(hubId: widget.hub.id),
           _BaralhosTab(hubId: widget.hub.id),
-          // <<< NOVA TELA DE FÓRUM PRIVADO ADICIONADA >>>
           ForumWidget(
-            // Passamos a coleção específica deste Hub
             topicsCollection: _firestore.collection('hubs').doc(widget.hub.id).collection('forum_topics'),
-            currentUser: _currentUserProfile,
+            currentUser: _currentUserProfile!,
           ),
         ],
       ),
@@ -304,8 +307,6 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
   }
 }
 
-
-// --- WIDGET WRAPPER PARA O CHAT (Stateful para evitar loop) ---
 class _HubChatWrapper extends StatefulWidget {
   final NexoHub hub;
   const _HubChatWrapper({required this.hub});
@@ -316,17 +317,16 @@ class _HubChatWrapper extends StatefulWidget {
 
 class _HubChatWrapperState extends State<_HubChatWrapper> {
   late Future<ChatRoom> _chatRoomFuture;
-  late final ChatService _chatService;
-
+  
   @override
-  void initState() {
-    super.initState();
-    _chatService = context.read<ChatService>();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
     _chatRoomFuture = _getOrCreateHubChat();
   }
 
   Future<ChatRoom> _getOrCreateHubChat() async {
-    final existingRoom = await _chatService.getChatRoomById(widget.hub.id);
+    final chatService = context.read<ChatService>();
+    final existingRoom = await chatService.getChatRoomById(widget.hub.id);
 
     if (existingRoom != null) {
       return existingRoom;
@@ -342,7 +342,7 @@ class _HubChatWrapperState extends State<_HubChatWrapper> {
       lastMessageTimestamp: Timestamp.now(),
     );
 
-    final createdRoom = await _chatService.createChatRoom(newChatRoom);
+    final createdRoom = await chatService.createChatRoom(newChatRoom);
     return createdRoom!;
   }
 
@@ -366,8 +366,6 @@ class _HubChatWrapperState extends State<_HubChatWrapper> {
     );
   }
 }
-
-// --- WIDGETS DAS ABAS (DEFINIDOS INTERNAMENTE) ---
 
 class _SobreTab extends StatelessWidget {
   final String description;
@@ -522,44 +520,6 @@ class _BaralhosTab extends StatelessWidget {
   }
 }
 
-class _ProvasTab extends StatelessWidget {
-  final String hubId;
-  const _ProvasTab({required this.hubId});
-
-  @override
-  Widget build(BuildContext context) {
-    final hubService = Provider.of<NexoHubService>(context, listen: false);
-    return StreamBuilder<List<Quiz>>(
-      stream: hubService.getSharedQuizzesStream(hubId),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-        }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-           return const Center(child: Text('Nenhuma prova compartilhada.'));
-        }
-        final quizzes = snapshot.data!;
-        return ListView.builder(
-          itemCount: quizzes.length,
-          itemBuilder: (context, index) {
-            final quiz = quizzes[index];
-            return ListTile(
-              leading: const Icon(Icons.quiz),
-              title: Text(quiz.title),
-              onTap: () {
-                 Navigator.of(context).push(MaterialPageRoute(
-                    builder: (context) => TelaRealizarQuiz(quiz: quiz),
-                  ));
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-// --- VERSÃO MODIFICADA DA TELA DE CHAT (SEM APPBAR) ---
 class TelaChatMensagensSemAppBar extends StatefulWidget {
   final ChatRoom chatRoom;
   const TelaChatMensagensSemAppBar({required this.chatRoom, super.key});

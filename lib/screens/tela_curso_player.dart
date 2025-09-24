@@ -2,34 +2,33 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:nexo/models/models.dart';
 import 'package:nexo/services/firestore_service.dart';
 import 'package:nexo/widgets/user_avatar.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'dart:async';
-import 'package:fluttertoast/fluttertoast.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class TelaCursoPlayer extends StatefulWidget {
   final Curso curso;
   final UserModel profProfile;
   final FirestoreService firestoreService;
 
-  // --- CORREÇÃO DEFINITIVA USANDO INICIALIZADOR ---
-  // O parâmetro 'firestoreService' agora é opcional e nullable
   TelaCursoPlayer({
     super.key,
     required this.curso,
     required this.profProfile,
     FirestoreService? firestoreService,
-  }) : firestoreService = firestoreService ?? FirestoreService(); // O valor padrão é atribuído aqui
+  }) : firestoreService = firestoreService ?? FirestoreService();
 
   @override
   State<TelaCursoPlayer> createState() => _TelaCursoPlayerState();
 }
 
 class _TelaCursoPlayerState extends State<TelaCursoPlayer> {
+  late final FirestoreService _firestoreService;
   late final String _currentUserId;
   late final WebViewController _webViewController;
   final TextEditingController _commentController = TextEditingController();
@@ -44,17 +43,19 @@ class _TelaCursoPlayerState extends State<TelaCursoPlayer> {
   @override
   void initState() {
     super.initState();
+    _firestoreService = widget.firestoreService;
     _currentUserId = FirebaseAuth.instance.currentUser!.uid;
 
     _webViewController = WebViewController();
 
+    // --- CORREÇÃO: Ambas as chamadas problemáticas estão agora dentro da proteção ---
     if (!kIsWeb) {
       _webViewController
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
         ..setBackgroundColor(const Color(0x00000000));
     }
-
-    _lessonsStream = widget.firestoreService.streamLessons(widget.curso.ownerId, widget.curso.id);
+    
+    _lessonsStream = _firestoreService.streamLessons(widget.curso.ownerId, widget.curso.id);
     _loadInitialLesson();
   }
   
@@ -93,23 +94,23 @@ class _TelaCursoPlayerState extends State<TelaCursoPlayer> {
     if (mounted) {
       setState(() {
         _currentLesson = lesson;
-        _commentsStream = widget.firestoreService.streamLessonComments(widget.curso.ownerId, widget.curso.id, lesson.id);
+        _commentsStream = _firestoreService.streamLessonComments(widget.curso.ownerId, widget.curso.id, lesson.id);
       });
     }
   }
 
   Future<void> _rateCourse(int rating) async {
     try {
-        await widget.firestoreService.rateCurso(widget.curso.ownerId, widget.curso.id, _currentUserId, rating);
-        if (mounted) _showToast('Avaliação enviada!');
+       await _firestoreService.rateCurso(widget.curso.ownerId, widget.curso.id, _currentUserId, rating);
+       if (mounted) _showToast('Avaliação enviada!');
     } catch(e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao enviar avaliação: $e'), backgroundColor: Colors.red));
+       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao enviar avaliação: $e'), backgroundColor: Colors.red));
     }
   }
   
   Widget _buildStarRating() {
     return StreamBuilder<DocumentSnapshot<Curso>>(
-      stream: widget.firestoreService.getCursoStream(widget.curso.ownerId, widget.curso.id),
+      stream: _firestoreService.getCursoStream(widget.curso.ownerId, widget.curso.id),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const SizedBox(height: 40);
         final curso = snapshot.data!.data();
@@ -125,7 +126,7 @@ class _TelaCursoPlayerState extends State<TelaCursoPlayer> {
           children: [
             Text('Avalie este CURSO', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-              Row(
+             Row(
               children: [
                 ...List.generate(5, (index) {
                   final starNum = index + 1;
@@ -146,40 +147,45 @@ class _TelaCursoPlayerState extends State<TelaCursoPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<Lesson>>(
-      stream: _lessonsStream,
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator()));
-        }
-        _allLessons = snapshot.data!;
-        if (_currentLesson == null && _allLessons.isNotEmpty) {
-          _loadInitialLesson();
-          return Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator(color: Colors.white,)));
-        }
-        if (_currentLesson == null) {
-          return Scaffold(appBar: AppBar(title: Text(widget.curso.title)), body: const Center(child: Text('Este curso ainda não tem aulas.')));
-        }
+    // Adicionamos um Scaffold aqui para garantir que a tela tenha uma estrutura base
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.curso.title),
+      ),
+      body: StreamBuilder<List<Lesson>>(
+        stream: _lessonsStream,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text('Este curso ainda não tem aulas.'));
+          }
+          
+          _allLessons = snapshot.data!;
+          if (_currentLesson == null && _allLessons.isNotEmpty) {
+            // A lógica de carregar a aula inicial já está no initState
+            return const Center(child: CircularProgressIndicator(color: Colors.white));
+          }
+          if (_currentLesson == null) {
+            return const Center(child: Text('Não foi possível carregar a aula.'));
+          }
 
-        bool isLargeScreen = MediaQuery.of(context).size.width > 900;
-        if (isLargeScreen) {
-          return Scaffold(
-            body: Row(
+          bool isLargeScreen = MediaQuery.of(context).size.width > 900;
+          if (isLargeScreen) {
+            return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildLessonListSidebar(context, _allLessons),
                 Expanded(child: _buildMainContent(context, _currentLesson!)),
               ],
-            ),
-          );
-        } else {
-          return Scaffold(
-            appBar: AppBar(title: Text(_currentLesson!.title, style: const TextStyle(fontSize: 18), overflow: TextOverflow.ellipsis)),
-            drawer: Drawer(child: _buildLessonListSidebar(context, _allLessons)),
-            body: _buildMainContent(context, _currentLesson!),
-          );
-        }
-      },
+            );
+          } else {
+            return _buildMainContent(context, _currentLesson!);
+          }
+        },
+      ),
+      drawer: MediaQuery.of(context).size.width <= 900 ? Drawer(child: _buildLessonListSidebar(context, _allLessons)) : null,
     );
   }
 
@@ -197,7 +203,7 @@ class _TelaCursoPlayerState extends State<TelaCursoPlayer> {
               itemCount: lessons.length,
               itemBuilder: (context, index) {
                 final lesson = lessons[index];
-                final bool isSelected = lesson.id == _currentLesson!.id;
+                final bool isSelected = _currentLesson != null && lesson.id == _currentLesson!.id;
                 return Material(
                   color: isSelected ? Theme.of(context).primaryColor.withOpacity(0.3) : Colors.transparent,
                   child: ListTile(
@@ -249,8 +255,10 @@ class _TelaCursoPlayerState extends State<TelaCursoPlayer> {
         const SizedBox(height: 24),
         ElevatedButton.icon(
           onPressed: lesson.completed ? null : () async {
-            lesson.completed = true;
-            await widget.firestoreService.updateLesson(widget.curso.ownerId, widget.curso.id, lesson);
+            setState(() {
+              lesson.completed = true;
+            });
+            await _firestoreService.updateLesson(widget.curso.ownerId, widget.curso.id, lesson);
             _showToast('Aula marcada como concluída!');
           },
           icon: const Icon(Icons.check_circle_outline),
@@ -278,7 +286,7 @@ class _TelaCursoPlayerState extends State<TelaCursoPlayer> {
               if (_commentController.text.trim().isNotEmpty) {
                 if (currentUserProfile == null) return; 
                 final newComment = LessonComment(id: '', authorId: currentUserProfile.id, authorUsername: currentUserProfile.username, authorPhotoUrl: currentUserProfile.photoUrl, text: _commentController.text.trim(), createdAt: Timestamp.now());
-                await widget.firestoreService.addLessonComment(widget.curso.ownerId, widget.curso.id, lesson.id, newComment);
+                await _firestoreService.addLessonComment(widget.curso.ownerId, widget.curso.id, lesson.id, newComment);
                 _commentController.clear();
                 _showToast('Comentário publicado!');
               }
@@ -290,7 +298,9 @@ class _TelaCursoPlayerState extends State<TelaCursoPlayer> {
         StreamBuilder<List<LessonComment>>(
           stream: _commentsStream,
           builder: (context, snapshot) {
-            if (!snapshot.hasData) return const Center(child: Text('Carregando comentários...'));
+            if (snapshot.connectionState != ConnectionState.active || !snapshot.hasData) {
+              return const Center(child: Text('Carregando comentários...'));
+            }
             if (snapshot.data!.isEmpty) return const Center(child: Text('Seja o primeiro a comentar!'));
             final comments = snapshot.data!;
             return ListView.separated(

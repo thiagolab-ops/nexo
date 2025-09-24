@@ -1,6 +1,7 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:webview_flutter/webview_flutter.dart'; // <<< PACOTE CORRETO
+import 'package:webview_flutter/webview_flutter.dart';
 
 class TelaVideoPlayerGenerica extends StatefulWidget {
   final String videoUrl;
@@ -9,7 +10,7 @@ class TelaVideoPlayerGenerica extends StatefulWidget {
   const TelaVideoPlayerGenerica({
     super.key, 
     required this.videoUrl, 
-    this.videoTitle = 'Nexo Go',
+    this.videoTitle = 'Daxu Go',
   });
 
   @override
@@ -18,14 +19,12 @@ class TelaVideoPlayerGenerica extends StatefulWidget {
 
 class _TelaVideoPlayerGenericaState extends State<TelaVideoPlayerGenerica> {
   late final WebViewController _controller;
-  bool _isYouTube = false;
 
   @override
   void initState() {
     super.initState();
 
     String url = widget.videoUrl;
-    // Converte links normais do YouTube para 'embed'
     if ((url.contains('youtube.com') || url.contains('youtu.be')) && !url.contains('embed')) {
       String? videoId;
       if (url.contains('youtu.be/')) {
@@ -35,16 +34,17 @@ class _TelaVideoPlayerGenericaState extends State<TelaVideoPlayerGenerica> {
       }
       if (videoId != null) {
         url = 'https://www.youtube.com/embed/$videoId?autoplay=1';
-        _isYouTube = true;
       }
-    } else if (url.contains('youtube.com/embed/')) {
-      _isYouTube = true;
     }
 
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0x00000000))
-      ..loadRequest(Uri.parse(url));
+    _controller = WebViewController();
+    
+    if (!kIsWeb) {
+      _controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+      _controller.setBackgroundColor(const Color(0x00000000));
+    }
+    
+    _controller.loadRequest(Uri.parse(url));
   }
 
 
@@ -57,7 +57,6 @@ class _TelaVideoPlayerGenericaState extends State<TelaVideoPlayerGenerica> {
       body: Center(
         child: AspectRatio(
           aspectRatio: 16 / 9,
-          // Usa o WebViewWidget universal
           child: WebViewWidget(controller: _controller),
         ),
       ),

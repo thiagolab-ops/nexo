@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:nexo/models/models.dart';
 import 'package:nexo/screens/tela_curso_player.dart';
-import 'package:nexo/screens/tela_video_player_generica.dart'; // <<< IMPORTADO
+import 'package:nexo/screens/tela_video_player_generica.dart';
 import 'package:nexo/services/firestore_service.dart';
 import 'package:provider/provider.dart';
-// url_launcher não é mais necessário aqui
 
 class TelaNexoGoPublica extends StatefulWidget {
-  final UserModel profUser; 
+  final UserModel profUser;
   const TelaNexoGoPublica({super.key, required this.profUser});
 
   @override
@@ -24,6 +23,12 @@ class _TelaNexoGoPublicaState extends State<TelaNexoGoPublica> with SingleTicker
     _tabController = TabController(length: 2, vsync: this);
     _firestoreService = context.read<FirestoreService>();
   }
+  
+  @override
+  void dispose(){
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +38,7 @@ class _TelaNexoGoPublicaState extends State<TelaNexoGoPublica> with SingleTicker
           controller: _tabController,
           tabs: const [
             Tab(icon: Icon(Icons.school_outlined), text: 'CURSOS'),
-            Tab(icon: Icon(Icons.video_collection_outlined), text: 'ARQUIVOS'),
+            Tab(icon: Icon(Icons.video_collection_outlined), text: 'VÍDEOS'), // <<< NOME ATUALIZADO
           ],
         ),
         Expanded(
@@ -110,7 +115,6 @@ class _TelaNexoGoPublicaState extends State<TelaNexoGoPublica> with SingleTicker
                 title: Text(video.title),
                 subtitle: Text(video.subject),
                 trailing: const Icon(Icons.play_arrow),
-                // --- ONTAP ATUALIZADO PARA O PLAYER GENÉRICO ---
                 onTap: () {
                   Navigator.of(context).push(MaterialPageRoute(
                       builder: (context) => TelaVideoPlayerGenerica(videoUrl: video.videoUrl, videoTitle: video.title),
