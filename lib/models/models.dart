@@ -1,7 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 // --- MODELOS DE POST E COMMENT ---
+// (Classes Post, Comment, ReportModel, ProfessorStats, NotificationModel, HubEvent, UserModel, Baralho, Cartao, NexoHub, NexoPadDocument, ChatRoomType, ChatRoom, ChatMessage, Quiz, QuizQuestion, AgendaEvent)
+// ... (nenhuma mudança nessas classes) ...
 class Post {
   final String id;
   final String authorId;
@@ -84,9 +85,6 @@ class Comment {
   }
 }
 
-// --- OUTROS MODELOS ---
-// (ReportModel, ProfessorStats, NotificationModel, HubEvent)
-// ... (nenhuma mudança nessas classes) ...
 class ReportModel {
   final String id;
   final String reporterId;
@@ -246,7 +244,6 @@ class HubEvent {
   }
 }
 
-
 class UserModel {
   final String id;
   final String username;
@@ -260,7 +257,7 @@ class UserModel {
   final List<String> interests;
   final int xp;
   final int level;
-  final int streak;
+  final int studyStreak; // --- NOVO CAMPO: studyStreak ---
   final Timestamp lastStudyDate;
   final String role;
   final bool hasCompletedOnboarding;
@@ -279,7 +276,7 @@ class UserModel {
     this.interests = const [],
     this.xp = 0,
     this.level = 1,
-    this.streak = 0,
+    this.studyStreak = 0, // --- NOVO CAMPO: studyStreak ---
     required this.lastStudyDate,
     this.role = 'student',
     this.hasCompletedOnboarding = false,
@@ -301,7 +298,7 @@ class UserModel {
       interests: List<String>.from(data['interests'] ?? []),
       xp: data['xp'] ?? 0,
       level: data['level'] ?? 1,
-      streak: data['streak'] ?? 0,
+      studyStreak: data['studyStreak'] ?? 0, // --- NOVO CAMPO: studyStreak ---
       lastStudyDate: data['lastStudyDate'] ?? data['createdAt'] ?? Timestamp.now(),
       role: data['role'] ?? 'student',
       hasCompletedOnboarding: data['hasCompletedOnboarding'] ?? false,
@@ -316,7 +313,7 @@ class UserModel {
       'followerIds': followerIds,
       'followingIds': followingIds,
       'blockedUserIds': blockedUserIds,
-      'interests': interests, 'xp': xp, 'level': level, 'streak': streak,
+      'interests': interests, 'xp': xp, 'level': level, 'studyStreak': studyStreak, // --- NOVO CAMPO: studyStreak ---
       'lastStudyDate': lastStudyDate,
       'role': role,
       'hasCompletedOnboarding': hasCompletedOnboarding,
@@ -659,13 +656,25 @@ class VideoNexo { // (Arquivo)
   });
 
   String get thumbnailUrl {
-    if (videoUrl.contains('youtube.com') || videoUrl.contains('youtu.be')) {
-      final videoId = YoutubePlayerController.convertUrlToId(videoUrl);
-      if (videoId != null && videoId.isNotEmpty) {
-        return 'https://img.youtube.com/vi/$videoId/0.jpg';
+    try {
+      if (videoUrl.contains('youtube.com') || videoUrl.contains('youtu.be')) {
+        String? videoId;
+        if (videoUrl.contains('youtu.be/')) {
+          videoId = videoUrl.split('youtu.be/').last.split('?').first.split('&').first;
+        } else if (videoUrl.contains('watch?v=')) {
+           videoId = videoUrl.split('watch?v=').last.split('?').first.split('&').first;
+        } else if (videoUrl.contains('/embed/')) {
+           videoId = videoUrl.split('/embed/').last.split('?').first.split('&').first;
+        }
+
+        if (videoId != null && videoId.isNotEmpty) {
+          return 'https://img.youtube.com/vi/$videoId/0.jpg';
+        }
       }
+    } catch (e) {
+      print('Erro ao extrair thumbnail: $e');
     }
-    return ''; 
+    return ''; // Retorno seguro
   }
 
   Map<String, dynamic> toMap() {
@@ -750,14 +759,13 @@ class Curso { // (Curso)
   }
 }
 
-// --- MODELO LESSON ATUALIZADO ---
 class Lesson {
   final String id;
   String title;
   String videoUrl;
   int orderIndex;
   final Timestamp createdAt;
-  bool completed; // <<< CAMPO ADICIONADO (do seu protótipo)
+  bool completed; 
 
   Lesson({
     required this.id,
@@ -765,15 +773,27 @@ class Lesson {
     required this.videoUrl,
     required this.orderIndex,
     required this.createdAt,
-    this.completed = false, // <<< ADICIONADO
+    this.completed = false, 
   });
   
   String get thumbnailUrl {
-    if (videoUrl.contains('youtube.com') || videoUrl.contains('youtu.be')) {
-      final videoId = YoutubePlayerController.convertUrlToId(videoUrl);
-      if (videoId != null && videoId.isNotEmpty) {
-        return 'https://img.youtube.com/vi/$videoId/0.jpg';
+    try {
+      if (videoUrl.contains('youtube.com') || videoUrl.contains('youtu.be')) {
+        String? videoId;
+        if (videoUrl.contains('youtu.be/')) {
+          videoId = videoUrl.split('youtu.be/').last.split('?').first.split('&').first;
+        } else if (videoUrl.contains('watch?v=')) {
+           videoId = videoUrl.split('watch?v=').last.split('?').first.split('&').first;
+        } else if (videoUrl.contains('/embed/')) {
+           videoId = videoUrl.split('/embed/').last.split('?').first.split('&').first;
+        }
+
+        if (videoId != null && videoId.isNotEmpty) {
+          return 'https://img.youtube.com/vi/$videoId/0.jpg';
+        }
       }
+    } catch (e) {
+      print('Erro ao extrair thumbnail: $e');
     }
     return ''; 
   }
@@ -784,7 +804,7 @@ class Lesson {
       'videoUrl': videoUrl,
       'orderIndex': orderIndex,
       'createdAt': createdAt,
-      'completed': completed, // <<< ADICIONADO
+      'completed': completed,
     };
   }
 
@@ -796,12 +816,11 @@ class Lesson {
       videoUrl: data['videoUrl'] ?? '',
       orderIndex: data['orderIndex'] ?? 0,
       createdAt: data['createdAt'] ?? Timestamp.now(),
-      completed: data['completed'] ?? false, // <<< ADICIONADO
+      completed: data['completed'] ?? false,
     );
   }
 }
 
-// --- NOVO MODELO PARA COMENTÁRIOS DE AULA ---
 class LessonComment {
   final String id;
   final String authorId;
@@ -819,7 +838,7 @@ class LessonComment {
     required this.createdAt,
   });
 
-   Map<String, dynamic> toMap() {
+    Map<String, dynamic> toMap() {
     return {
       'authorId': authorId,
       'authorUsername': authorUsername,

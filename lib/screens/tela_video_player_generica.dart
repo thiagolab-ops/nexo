@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:youtube_player_iframe/youtube_player_iframe.dart';
+import 'package:webview_flutter/webview_flutter.dart'; // <<< PACOTE CORRETO
 
 class TelaVideoPlayerGenerica extends StatefulWidget {
   final String videoUrl;
@@ -17,37 +17,36 @@ class TelaVideoPlayerGenerica extends StatefulWidget {
 }
 
 class _TelaVideoPlayerGenericaState extends State<TelaVideoPlayerGenerica> {
-  late YoutubePlayerController _ytController;
-  bool _isPlayerReady = false;
+  late final WebViewController _controller;
+  bool _isYouTube = false;
 
   @override
   void initState() {
     super.initState();
-    final videoId = YoutubePlayerController.convertUrlToId(widget.videoUrl);
 
-    if (videoId != null) {
-      _ytController = YoutubePlayerController.fromVideoId(
-        videoId: videoId,
-        params: const YoutubePlayerParams(
-          showControls: true,
-          showFullscreenButton: true,
-          color: 'red',
-        ),
-      );
-      // A linha '..onInit = ()' foi removida daqui.
-      _isPlayerReady = true; // Nós sabemos que está pronto se o videoId for válido
-    } else {
-      _isPlayerReady = false;
+    String url = widget.videoUrl;
+    // Converte links normais do YouTube para 'embed'
+    if ((url.contains('youtube.com') || url.contains('youtu.be')) && !url.contains('embed')) {
+      String? videoId;
+      if (url.contains('youtu.be/')) {
+        videoId = url.split('youtu.be/').last.split('?').first.split('&').first;
+      } else if (url.contains('watch?v=')) {
+         videoId = url.split('watch?v=').last.split('?').first.split('&').first;
+      }
+      if (videoId != null) {
+        url = 'https://www.youtube.com/embed/$videoId?autoplay=1';
+        _isYouTube = true;
+      }
+    } else if (url.contains('youtube.com/embed/')) {
+      _isYouTube = true;
     }
+
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0x00000000))
+      ..loadRequest(Uri.parse(url));
   }
 
-  @override
-  void dispose() {
-    if (_isPlayerReady) { // Só fecha o controller se ele foi inicializado
-      _ytController.close();
-    }
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,20 +55,11 @@ class _TelaVideoPlayerGenericaState extends State<TelaVideoPlayerGenerica> {
         title: Text(widget.videoTitle),
       ),
       body: Center(
-        child: _isPlayerReady
-          ? YoutubePlayer( // O nome do widget estava correto
-              controller: _ytController,
-              aspectRatio: 16 / 9,
-            )
-          : Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, color: Colors.red, size: 60),
-                const SizedBox(height: 16),
-                Text('Não foi possível carregar este vídeo.', style: GoogleFonts.lato(fontSize: 18)),
-                Text('A URL pode ser inválida ou não ser do YouTube.', style: GoogleFonts.lato(fontSize: 14, color: Colors.grey)),
-              ],
-            ),
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          // Usa o WebViewWidget universal
+          child: WebViewWidget(controller: _controller),
+        ),
       ),
     );
   }

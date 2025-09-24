@@ -33,8 +33,16 @@ import 'screens/tela_social_nova.dart';
 import 'screens/tela_nexo_pad.dart';
 import 'widgets/user_avatar.dart';
 
+// --- IMPORT NECESSÁRIO ---
+import 'package:webview_flutter_web/webview_flutter_web.dart';
+import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // --- LINHA DE INICIALIZAÇÃO DO WEBVIEW ADICIONADA ---
+  // Isso registra a implementação web ANTES de qualquer outra coisa
+  WebViewPlatform.instance = WebWebViewPlatform();
   
   await EasyLocalization.ensureInitialized();
   await Firebase.initializeApp(
@@ -52,6 +60,8 @@ void main() async {
   );
 }
 
+// O resto do seu arquivo main.dart permanece exatamente o mesmo
+// Nenhuma outra mudança é necessária.
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -88,7 +98,7 @@ class MyApp extends StatelessWidget {
                   localizationsDelegates: context.localizationDelegates,
                   supportedLocales: context.supportedLocales,
                   locale: context.locale,
-                  title: 'Daxu', 
+                  title: 'DAXU', 
                   theme: NexoTheme.light,
                   darkTheme: NexoTheme.dark,
                   themeMode: themeProvider.themeMode,
@@ -131,7 +141,6 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
   }
 
   void _mostrarDialogoNovoBaralho({Baralho? baralhoExistente}) {
-    // ... (código do diálogo sem mudanças)
     final nomeController = TextEditingController(text: baralhoExistente?.nome);
     showDialog(
       context: context,
@@ -172,7 +181,6 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
   }
 
   void _showCreateHubDialog() {
-    // ... (código do diálogo sem mudanças)
     final nameController = TextEditingController();
     final descriptionController = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -232,7 +240,6 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
   }
 
   Widget? _buildFloatingActionButton(BuildContext context, UserModel userProfile) {
-    // ... (código do FAB sem mudanças)
     switch (_indiceAtual) {
       case 0: 
         return FloatingActionButton(
@@ -295,7 +302,6 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
 
     return Scaffold(
       appBar: AppBar(
-        // --- LOGO ATUALIZADO PARA MAIÚSCULO ---
         title: Text('DAXU', style: GoogleFonts.pressStart2p(fontSize: 20)),
         actions: [
           Builder(
@@ -356,14 +362,13 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
         onTap: (indice) => setState(() => _indiceAtual = indice),
         type: BottomNavigationBarType.fixed,
         items: [
-          // --- ATUALIZADO PARA 7 ABAS COM AS LABELS NOVAS ---
-          BottomNavigationBarItem(icon: const Icon(Icons.style), label: 'card_label'.tr()), // Daxu Card
-          BottomNavigationBarItem(icon: const Icon(Icons.group_work), label: 'hub_label'.tr()), // Daxu Hub
-          BottomNavigationBarItem(icon: const Icon(Icons.edit_document), label: 'pad_label'.tr()), // Daxu Pad
-          BottomNavigationBarItem(icon: const Icon(Icons.forum_outlined), label: 'chan_label'.tr()), // Daxu Chan
-          BottomNavigationBarItem(icon: const Icon(Icons.dynamic_feed), label: 'feed_label'.tr()), // Daxu Feed
-          BottomNavigationBarItem(icon: const Icon(Icons.videogame_asset_outlined), label: 'play_label'.tr()), // Daxu Play
-          BottomNavigationBarItem(icon: const Icon(Icons.people_alt_outlined), label: 'social_label'.tr()), // Social
+          BottomNavigationBarItem(icon: const Icon(Icons.style), label: 'card_label'.tr()),
+          BottomNavigationBarItem(icon: const Icon(Icons.group_work), label: 'hub_label'.tr()),
+          BottomNavigationBarItem(icon: const Icon(Icons.edit_document), label: 'pad_label'.tr()),
+          BottomNavigationBarItem(icon: const Icon(Icons.forum_outlined), label: 'chan_label'.tr()),
+          BottomNavigationBarItem(icon: const Icon(Icons.dynamic_feed), label: 'feed_label'.tr()),
+          BottomNavigationBarItem(icon: const Icon(Icons.videogame_asset_outlined), label: 'play_label'.tr()),
+          BottomNavigationBarItem(icon: const Icon(Icons.people_alt_outlined), label: 'social_label'.tr()),
         ],
       ),
     );

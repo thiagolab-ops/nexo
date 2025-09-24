@@ -3,16 +3,22 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/models.dart';
 
 class FirestoreService {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  FirebaseFirestore _db = FirebaseFirestore.instance;
   
+  // --- MÉTODO PARA TESTES ---
+  // Permite que nossos testes substituam o Firestore real por uma versão falsa
+  void setFirestoreForTests(FirebaseFirestore firestore) {
+    _db = firestore;
+  }
+  // --- FIM DO MÉTODO PARA TESTES ---
+
   String get _userId {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('Usuário não autenticado.');
     return user.uid;
   }
 
-  // --- FUNÇÕES DE BARALHO (DECK) ---
-  // (Todo o código de Baralho/Cartão permanece o mesmo)
+  // (O resto do seu arquivo de serviço permanece exatamente o mesmo...)
   Future<void> createDeckFromPost(Post post, List<Map<String, String>> cardsData) async {
     final batch = _db.batch();
     
@@ -117,8 +123,6 @@ class FirestoreService {
     await batch.commit();
   }
 
-  // --- CRUD DA VIDEOTECA (ARQUIVO) ---
-  // (Código do VideoNexo permanece o mesmo)
   CollectionReference<VideoNexo> _videoRef(String userId) {
     return _db.collection('users').doc(userId).collection('videoteca')
       .withConverter<VideoNexo>(
@@ -146,8 +150,6 @@ class FirestoreService {
     await _videoRef(userId).doc(videoId).delete();
   }
   
-  // --- CRUD DE CURSOS E LIÇÕES ADICIONADO ---
-  
   CollectionReference<Curso> _cursosRef(String userId) {
     return _db.collection('users').doc(userId).collection('cursos')
       .withConverter<Curso>(
@@ -164,7 +166,6 @@ class FirestoreService {
        );
   }
   
-  // <<< NOVA REFERÊNCIA PARA COMENTÁRIOS DA AULA >>>
   CollectionReference<LessonComment> _lessonCommentsRef(String userId, String cursoId, String lessonId) {
      return _lessonsRef(userId, cursoId).doc(lessonId).collection('comments')
        .withConverter<LessonComment>(
@@ -172,8 +173,6 @@ class FirestoreService {
          toFirestore: (comment, _) => comment.toMap(),
        );
   }
-
-  // --- Funções de CURSO ---
   
   Future<DocumentReference<Curso>> createCurso(Curso curso) async {
     return await _cursosRef(curso.ownerId).add(curso);
@@ -204,8 +203,6 @@ class FirestoreService {
       fieldToUpdate: rating,
     });
   }
-
-  // --- Funções de LIÇÃO (AULA) ---
   
   Stream<List<Lesson>> streamLessons(String userId, String cursoId) {
     return _lessonsRef(userId, cursoId)
@@ -235,7 +232,6 @@ class FirestoreService {
     await batch.commit();
   }
 
-  // <<< NOVAS FUNÇÕES DE COMENTÁRIOS DE AULA >>>
   Stream<List<LessonComment>> streamLessonComments(String userId, String cursoId, String lessonId) {
     return _lessonCommentsRef(userId, cursoId, lessonId)
         .orderBy('createdAt', descending: true)
