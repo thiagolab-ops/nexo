@@ -21,23 +21,18 @@ class BaralhoCardWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // --- INÍCIO DA CORREÇÃO DE TEMA ---
-    // 1. Verificamos manualmente qual é o tema atual
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    // 2. Criamos estilos de texto explícitos baseados no tema
     final TextStyle? titleStyle = Theme.of(context).textTheme.titleLarge?.copyWith(
-      color: isDarkMode ? Colors.white : Colors.black87, // Texto branco no escuro, preto no claro
+      color: isDarkMode ? Colors.white : Colors.black87,
     );
     
     final TextStyle? descriptionStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-      color: isDarkMode ? Colors.grey[400] : Colors.grey[700], // Cores de subtítulo apropriadas
+      color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
     );
-    // --- FIM DA CORREÇÃO ---
 
     return Card(
       elevation: 4,
-      // A cor do Card (branco no claro, cinza-escuro no escuro) vem do nexo_theme.dart e está correta.
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
@@ -48,7 +43,7 @@ class BaralhoCardWidget extends StatelessWidget {
             children: [
               Text(
                 baralho.nome,
-                style: titleStyle, // 3. Aplicamos o estilo explícito
+                style: titleStyle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -59,34 +54,50 @@ class BaralhoCardWidget extends StatelessWidget {
                     baralho.descricao!,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: descriptionStyle, // 4. Aplicamos o estilo explícito
+                    style: descriptionStyle,
                   ),
                 ),
               const Spacer(),
+              // --- INÍCIO DA CORREÇÃO DE LAYOUT ---
+              // A fileira de botões foi completamente refatorada
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.share),
-                    onPressed: onShare,
-                    tooltip: 'Compartilhar no Hub',
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                    onPressed: onDelete,
-                    tooltip: 'Excluir Baralho',
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.edit_outlined),
-                    onPressed: onEdit,
-                    tooltip: 'Editar Nome',
-                  ),
-                  ElevatedButton(
+                  // Ação Principal: Botão de Play
+                  ElevatedButton.icon(
                     onPressed: onPlay,
-                    child: const Icon(Icons.play_arrow),
+                    icon: const Icon(Icons.play_arrow, size: 20),
+                    label: const Text('Jogar'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                  ),
+                  const SizedBox(width: 8), // Espaçamento
+                  // Ações Secundárias: Menu "..."
+                  PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'share') onShare();
+                      if (value == 'edit') onEdit();
+                      if (value == 'delete') onDelete();
+                    },
+                    itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                      const PopupMenuItem<String>(
+                        value: 'share',
+                        child: ListTile(leading: Icon(Icons.share), title: Text('Compartilhar')),
+                      ),
+                      const PopupMenuItem<String>(
+                        value: 'edit',
+                        child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Editar')),
+                      ),
+                      const PopupMenuItem<String>(
+                        value: 'delete',
+                        child: ListTile(leading: Icon(Icons.delete_outline, color: Colors.redAccent), title: Text('Excluir', style: TextStyle(color: Colors.redAccent))),
+                      ),
+                    ],
                   ),
                 ],
               )
+              // --- FIM DA CORREÇÃO ---
             ],
           ),
         ),

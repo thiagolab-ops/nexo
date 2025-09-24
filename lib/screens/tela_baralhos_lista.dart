@@ -10,7 +10,6 @@ import 'package:nexo/widgets/baralho_card_widget.dart';
 import 'package:provider/provider.dart';
 
 class TelaBaralhosLista extends StatefulWidget {
-  // <<< ESTE É O PARÂMETRO QUE ESTAVA FALTANDO NA DEFINIÇÃO DO ARQUIVO >>>
   final Function({Baralho? baralhoExistente}) showNewDeckDialog;
   
   const TelaBaralhosLista({
@@ -120,7 +119,10 @@ class _TelaBaralhosListaState extends State<TelaBaralhosLista> {
               maxCrossAxisExtent: 400,
               mainAxisSpacing: 16,
               crossAxisSpacing: 16,
-              childAspectRatio: 1.8,
+              // --- CORREÇÃO AQUI ---
+              // De 1.8 para 1.5, dando mais altura ao card
+              childAspectRatio: 1.5, 
+              // --- FIM DA CORREÇÃO ---
             ),
             itemCount: baralhos.length,
             itemBuilder: (context, index) {
