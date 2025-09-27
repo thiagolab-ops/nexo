@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daxu Mind Map</title>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.15.4"></script>
+</head>
+<body>
+    <svg id="markmap" style="width: 100%; height: 100%"></svg>
+
+    <script>
+        const { Markmap } = window.markmap;
+        let markmap;
+
+        function buildTree(nodes, parentId = null) {
+            const children = nodes.filter(node => node.parentId === parentId);
+            if (children.length === 0) return undefined;
+            return children.map(node => ({
+                content: node.text,
+                children: buildTree(nodes, node.id)
+            }));
+        }
+        
+        function loadMap(nodes) {
+            let rootNode;
+            if (!nodes || nodes.length === 0) {
+                rootNode = { content: "Meu Mapa Mental", children: [] };
+            } else {
+                const root = nodes.find(n => n.parentId === null) || nodes[0];
+                rootNode = {
+                    content: root.text,
+                    children: buildTree(nodes, root.id)
+                };
+            }
+            
+            const svgEl = document.getElementById('markmap');
+            if (markmap) markmap.setData(rootNode);
+            else markmap = Markmap.create(svgEl, null, rootNode);
+        }
+
+        // Adiciona um "ouvinte" que espera por mensagens do Flutter
+        window.addEventListener('message', (event) => {
+            try {
+                // Verificamos a origem por segurança, embora aqui seja localhost
+                if (event.origin !== "null" && !event.origin.startsWith("http://localhost:")) {
+                    console.warn("Mensagem ignorada de origem desconhecida:", event.origin);
+                    return;
+                }
+                const message = JSON.parse(event.data);
+                if (message.type === 'loadMap') {
+                    const nodes = JSON.parse(message.data);
+                    loadMap(nodes);
+                }
+            } catch (e) {
+                console.error("Erro ao processar mensagem do Flutter:", e);
+            }
+        });
+    </script>
+</body>
+</html>

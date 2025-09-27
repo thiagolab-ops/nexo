@@ -277,18 +277,10 @@ packages:
     dependency: "direct main"
     description:
       name: csv
-      sha256: "63ed2871dd6471193dffc52c0e6c76fb86269c00244d244297abbb355c84a86e"
+      sha256: c6aa2679b2a18cb57652920f674488d89712efaf4d3fdf2e537215b35fc19d6c
       url: "https://pub.dev"
     source: hosted
-    version: "5.1.1"
-  cupertino_icons:
-    dependency: "direct main"
-    description:
-      name: cupertino_icons
-      sha256: ba631d1c7f7bef6b729a622b7b752645a2d076dba9976925b8f25725a30e1ee6
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.8"
+    version: "6.0.0"
   dart_jsonwebtoken:
     dependency: transitive
     description:
@@ -413,10 +405,10 @@ packages:
     dependency: "direct main"
     description:
       name: file_picker
-      sha256: "1bbf65dd997458a08b531042ec3794112a6c39c07c37ff22113d2e7e4f81d4e4"
+      sha256: "825aec673606875c33cd8d3c4083f1a3c3999015a84178b317b7ef396b7384f3"
       url: "https://pub.dev"
     source: hosted
-    version: "6.2.1"
+    version: "8.0.7"
   file_selector_linux:
     dependency: transitive
     description:
@@ -607,7 +599,7 @@ packages:
     source: hosted
     version: "2.0.3"
   flutter_localizations:
-    dependency: "direct main"
+    dependency: transitive
     description: flutter
     source: sdk
     version: "0.0.0"
@@ -673,10 +665,10 @@ packages:
     dependency: "direct main"
     description:
       name: google_fonts
-      sha256: ebc94ed30fd13cefd397cb1658b593f21571f014b7d1197eeb41fb95f05d899a
+      sha256: "517b20870220c48752eafa0ba1a797a092fb22df0d89535fd9991e86ee2cdd9c"
       url: "https://pub.dev"
     source: hosted
-    version: "6.3.1"
+    version: "6.3.2"
   google_identity_services_web:
     dependency: transitive
     description:
@@ -838,13 +830,13 @@ packages:
     source: hosted
     version: "0.2.2"
   intl:
-    dependency: "direct main"
+    dependency: "direct overridden"
     description:
       name: intl
-      sha256: "3bc132a9dbce73a7e4a21a17d06e1878839ffbf975568bc875c60537824b0c4d"
+      sha256: "3df61194eb431efc39c4ceba583b95633a403f46c9fd341e550ce0bfa50e9aa5"
       url: "https://pub.dev"
     source: hosted
-    version: "0.18.1"
+    version: "0.20.2"
   io:
     dependency: transitive
     description:
@@ -854,7 +846,7 @@ packages:
     source: hosted
     version: "1.0.5"
   js:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: js
       sha256: "53385261521cc4a0c4658fd0ad07a7d14591cf8fc33abbceae306ddb974888dc"
@@ -1190,7 +1182,7 @@ packages:
     source: hosted
     version: "0.4.0"
   rxdart:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: rxdart
       sha256: "0c7c0cedd93788d996e33041ffecda924cc54389199cde4e6a34b440f50044cb"
@@ -1225,10 +1217,10 @@ packages:
     dependency: transitive
     description:
       name: shared_preferences_android
-      sha256: a2608114b1ffdcbc9c120eb71a0e207c71da56202852d4aab8a5e30a82269e74
+      sha256: bd14436108211b0d4ee5038689a56d4ae3620fd72fd6036e113bf1345bc74d9e
       url: "https://pub.dev"
     source: hosted
-    version: "2.4.12"
+    version: "2.4.13"
   shared_preferences_foundation:
     dependency: transitive
     description:
@@ -1475,7 +1467,7 @@ packages:
     source: hosted
     version: "4.5.1"
   vector_math:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: vector_math
       sha256: "80b3257d1492ce4d091729e3a67a60407d227c27241d6927be0130c98e741803"
