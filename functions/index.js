@@ -7,7 +7,68 @@ const logger = require("firebase-functions/logger");
 admin.initializeApp();
 const db = admin.firestore();
 
-// --- FUNÇÕES DE NOTIFICAÇÃO (ATUALIZADAS) ---
+// NOVA FUNÇÃO PARA CUSTOM CLAIMS
+exports.setUserRoleOnProfileUpdate = onDocumentUpdated("users/{userId}", async (event) => {
+  const beforeData = event.data.before.data();
+  const afterData = event.data.after.data();
+
+  if (beforeData.role === afterData.role) {
+    logger.info(`Role for ${event.params.userId} has not changed. No action taken.`);
+    return null;
+  }
+
+  const userId = event.params.userId;
+  const newRole = afterData.role;
+
+  logger.info(`Role changed for ${userId} to ${newRole}. Setting custom claims.`);
+
+  try {
+    await admin.auth().setCustomUserClaims(userId, {role: newRole});
+    logger.info(`Successfully set custom claim for ${userId}.`);
+    return {result: `Custom claim for role ${newRole} set for user ${userId}.`};
+  } catch (error) {
+    logger.error(`Error setting custom claim for ${userId}:`, error);
+    return null;
+  }
+});
+
+exports.onProfessorApplicationCreated = onDocumentCreated("professor_applications/{userId}", async (event) => {
+  const applicantId = event.params.userId;
+
+  const applicantDoc = await db.collection("users").doc(applicantId).get();
+  if (!applicantDoc.exists) {
+    logger.error(`[onProfessorApplicationCreated] Applicant user doc ${applicantId} not found.`);
+    return null;
+  }
+  const applicantUsername = applicantDoc.data().username;
+
+  const adminQuery = await db.collection("users").where("role", "==", "super_admin").get();
+
+  if (adminQuery.empty) {
+    logger.error("[onProfessorApplicationCreated] No super_admin user found to notify.");
+    return null;
+  }
+
+  const batch = db.batch();
+
+  adminQuery.forEach((adminDoc) => {
+    // const adminId = adminDoc.id; // Variável não utilizada removida para corrigir o lint.
+    const userRef = adminDoc.ref;
+    const notificationRef = userRef.collection("notifications").doc();
+    const notificationPayload = {
+      text: `${applicantUsername} solicitou para se tornar um professor.`,
+      sourceType: "professor_application",
+      sourceId: applicantId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      isRead: false,
+    };
+    batch.set(notificationRef, notificationPayload);
+    batch.update(userRef, {unreadNotificationCount: admin.firestore.FieldValue.increment(1)});
+  });
+
+  logger.info(`Notificando ${adminQuery.size} super_admin(s) sobre a nova aplicação de ${applicantUsername}.`);
+  return batch.commit();
+});
 
 exports.onNewComment = onDocumentCreated("posts/{postId}/comments/{commentId}", async (event) => {
   const commentData = event.data.data();
@@ -16,7 +77,7 @@ exports.onNewComment = onDocumentCreated("posts/{postId}/comments/{commentId}", 
   const postRef = db.collection("posts").doc(postId);
   const postDoc = await postRef.get();
   if (!postDoc.exists) {
-    /* ... */ return null;
+    return null;
   }
   const postData = postDoc.data();
   const postAuthorId = postData.authorId;
@@ -24,10 +85,9 @@ exports.onNewComment = onDocumentCreated("posts/{postId}/comments/{commentId}", 
   const commentAuthorUsername = commentData.authorUsername;
 
   if (postAuthorId === commentAuthorId) {
-    /* ... */ return null;
+    return null;
   }
 
-  // --- LÓGICA DE INCREMENTO ADICIONADA ---
   const userRef = db.collection("users").doc(postAuthorId);
   const notificationRef = userRef.collection("notifications").doc();
   const notificationPayload = {
@@ -40,11 +100,8 @@ exports.onNewComment = onDocumentCreated("posts/{postId}/comments/{commentId}", 
 
   const batch = db.batch();
   batch.set(notificationRef, notificationPayload);
-  batch.update(userRef, {
-    unreadNotificationCount: admin.firestore.FieldValue.increment(1),
-  });
+  batch.update(userRef, {unreadNotificationCount: admin.firestore.FieldValue.increment(1)});
 
-  logger.info(`Enviando notificação de comentário e incrementando para ${postAuthorId}`);
   return batch.commit();
 });
 
@@ -60,16 +117,15 @@ exports.onPostLiked = onDocumentUpdated("posts/{postId}", async (event) => {
   }
   const postAuthorId = postDataAfter.authorId;
   if (postAuthorId === newLikerId) {
-    /* ... */ return null;
+    return null;
   }
 
   const likerDoc = await db.collection("users").doc(newLikerId).get();
   if (!likerDoc.exists) {
-    /* ... */ return null;
+    return null;
   }
   const likerUsername = likerDoc.data().username;
 
-  // --- LÓGICA DE INCREMENTO ADICIONADA ---
   const userRef = db.collection("users").doc(postAuthorId);
   const notificationRef = userRef.collection("notifications").doc();
   const notificationPayload = {
@@ -82,19 +138,15 @@ exports.onPostLiked = onDocumentUpdated("posts/{postId}", async (event) => {
 
   const batch = db.batch();
   batch.set(notificationRef, notificationPayload);
-  batch.update(userRef, {
-    unreadNotificationCount: admin.firestore.FieldValue.increment(1),
-  });
+  batch.update(userRef, {unreadNotificationCount: admin.firestore.FieldValue.increment(1)});
 
-  logger.info(`Enviando notificação de like e incrementando para ${postAuthorId}`);
   return batch.commit();
 });
 
 exports.onAulaConvocada = onDocumentCreated("hubs/{hubId}/events/{eventId}", async (event) => {
   const eventData = event.data.data();
-
   if (!eventData.meetLink || eventData.meetLink.trim() === "" || !eventData.audience) {
-    /* ... */ return null;
+    return null;
   }
 
   const creatorId = eventData.creatorId;
@@ -111,14 +163,14 @@ exports.onAulaConvocada = onDocumentCreated("hubs/{hubId}/events/{eventId}", asy
   }
 
   if (recipientIds.length === 0) {
-    /* ... */ return null;
+    return null;
   }
 
   const batch = db.batch();
   recipientIds.forEach((userId) => {
     if (userId === creatorId) return;
 
-    const userRef = db.collection("users").doc(userId); // Ref do usuário
+    const userRef = db.collection("users").doc(userId);
     const notificationRef = userRef.collection("notifications").doc();
     const notificationPayload = {
       text: `${creatorUsername} convocou para a aula: "${eventTitle}"`,
@@ -130,17 +182,11 @@ exports.onAulaConvocada = onDocumentCreated("hubs/{hubId}/events/{eventId}", asy
       isRead: false,
     };
     batch.set(notificationRef, notificationPayload);
-    // --- LÓGICA DE INCREMENTO ADICIONADA AO BATCH ---
-    batch.update(userRef, {
-      unreadNotificationCount: admin.firestore.FieldValue.increment(1),
-    });
+    batch.update(userRef, {unreadNotificationCount: admin.firestore.FieldValue.increment(1)});
   });
 
-  logger.info(`Enviando ${recipientIds.length - 1} notificações de aula e incrementando contadores.`);
   return batch.commit();
 });
-
-// --- FUNÇÕES DE USUÁRIO (SEGUIR/DEIXAR DE SEGUIR) ATUALIZADAS ---
 
 exports.followUser = onCall(async (request) => {
   if (!request.auth) {
@@ -175,51 +221,20 @@ exports.followUser = onCall(async (request) => {
   const isCoNexo = targetUserData.followingIds && targetUserData.followingIds.includes(currentUserId);
 
   if (isCoNexo) {
-    const notificationForTarget = {
-      text: `Você e ${currentUserUsername} agora são Co-Nexos!`,
-      sourceType: "new_conexo",
-      sourceId: currentUserId,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      isRead: false,
-    };
+    const notificationForTarget = {text: `Você e ${currentUserUsername} agora são Co-Nexos!`, sourceType: "new_conexo", sourceId: currentUserId, createdAt: admin.firestore.FieldValue.serverTimestamp(), isRead: false};
     const notifRefTarget = targetUserRef.collection("notifications").doc();
     batch.set(notifRefTarget, notificationForTarget);
-    // --- LÓGICA DE INCREMENTO ADICIONADA ---
-    batch.update(targetUserRef, {
-      unreadNotificationCount: admin.firestore.FieldValue.increment(1),
-    });
+    batch.update(targetUserRef, {unreadNotificationCount: admin.firestore.FieldValue.increment(1)});
 
-    const notificationForCurrent = {
-      text: `Você e ${targetUserUsername} agora são Co-Nexos!`,
-      sourceType: "new_conexo",
-      sourceId: targetUserId,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      isRead: false,
-    };
+    const notificationForCurrent = {text: `Você e ${targetUserUsername} agora são Co-Nexos!`, sourceType: "new_conexo", sourceId: targetUserId, createdAt: admin.firestore.FieldValue.serverTimestamp(), isRead: false};
     const notifRefCurrent = currentUserRef.collection("notifications").doc();
     batch.set(notifRefCurrent, notificationForCurrent);
-    // --- LÓGICA DE INCREMENTO ADICIONADA ---
-    batch.update(currentUserRef, {
-      unreadNotificationCount: admin.firestore.FieldValue.increment(1),
-    });
-
-    logger.info(`Co-Nexo criado e contadores incrementados para ${currentUserId} e ${targetUserId}.`);
+    batch.update(currentUserRef, {unreadNotificationCount: admin.firestore.FieldValue.increment(1)});
   } else {
-    const notificationPayload = {
-      text: `${currentUserUsername} começou a te seguir.`,
-      sourceType: "new_follower",
-      sourceId: currentUserId,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      isRead: false,
-    };
+    const notificationPayload = {text: `${currentUserUsername} começou a te seguir.`, sourceType: "new_follower", sourceId: currentUserId, createdAt: admin.firestore.FieldValue.serverTimestamp(), isRead: false};
     const notificationRef = targetUserRef.collection("notifications").doc();
     batch.set(notificationRef, notificationPayload);
-    // --- LÓGICA DE INCREMENTO ADICIONADA ---
-    batch.update(targetUserRef, {
-      unreadNotificationCount: admin.firestore.FieldValue.increment(1),
-    });
-
-    logger.info(`Usuário ${currentUserId} agora segue ${targetUserId}, contador incrementado.`);
+    batch.update(targetUserRef, {unreadNotificationCount: admin.firestore.FieldValue.increment(1)});
   }
 
   await batch.commit();
@@ -228,7 +243,6 @@ exports.followUser = onCall(async (request) => {
 
 
 exports.unfollowUser = onCall(async (request) => {
-  // ... (sem mudanças aqui, "unfollow" não gera notificação)
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "A função deve ser chamada por um usuário autenticado.");
   }
@@ -241,10 +255,9 @@ exports.unfollowUser = onCall(async (request) => {
   const targetUserRef = db.collection("users").doc(targetUserId);
   const batch = db.batch();
   batch.update(currentUserRef, {followingIds: admin.firestore.FieldValue.arrayRemove(targetUserId)});
-  batch.update(targetUserRef, {followerIds: admin.firestore.FieldValue.arrayRemove(currentUserId)});
+  batch.update(targetUserRef, {followerIds: admin.firestore.FieldValue.arrayRemove(targetUserId)});
 
   await batch.commit();
-  logger.info(`Usuário ${currentUserId} deixou de seguir ${targetUserId}.`);
   return {status: "success"};
 });
 
@@ -261,12 +274,9 @@ exports.processarConvite = onCall(async (request) => {
   }
 
   const usersRef = db.collection("users");
-
   const referrerQuery = await usersRef.where("username", "==", referralUsername).limit(1).get();
-
   if (referrerQuery.empty) {
-    logger.error(`Usuário de referência não encontrado: ${referralUsername}`);
-    return {status: "error", message: "Referrer not found"};
+    logger.error(`Usuário de referência não encontrado: ${referralUsername}`); return {status: "error", message: "Referrer not found"};
   }
 
   const referrerDoc = referrerQuery.docs[0];
@@ -280,7 +290,6 @@ exports.processarConvite = onCall(async (request) => {
   const newUserUsername = newUserDoc.data().username;
 
   if (referrerId === newUserId) {
-    logger.info("Usuário tentou se auto-convidar.");
     return {status: "success", message: "Self-referral ignored"};
   }
 
@@ -288,57 +297,28 @@ exports.processarConvite = onCall(async (request) => {
   const newUserRef = usersRef.doc(newUserId);
   const referrerRef = usersRef.doc(referrerId);
 
-  // Novo usuário segue o Referrer
   batch.update(newUserRef, {followingIds: admin.firestore.FieldValue.arrayUnion(referrerId)});
   batch.update(referrerRef, {followerIds: admin.firestore.FieldValue.arrayUnion(newUserId)});
-
-  // Referrer segue o Novo usuário
   batch.update(referrerRef, {followingIds: admin.firestore.FieldValue.arrayUnion(newUserId)});
   batch.update(newUserRef, {followerIds: admin.firestore.FieldValue.arrayUnion(referrerId)});
 
-  // Envia notificação de "Co-Nexo" para AMBOS e incrementa contadores
-  const notificationForReferrer = {
-    text: `Você e ${newUserUsername} agora são Co-Nexos!`,
-    sourceType: "new_conexo",
-    sourceId: newUserId,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    isRead: false,
-  };
+  const notificationForReferrer = {text: `Você e ${newUserUsername} agora são Co-Nexos!`, sourceType: "new_conexo", sourceId: newUserId, createdAt: admin.firestore.FieldValue.serverTimestamp(), isRead: false};
   const notifRefReferrer = referrerRef.collection("notifications").doc();
   batch.set(notifRefReferrer, notificationForReferrer);
-  // --- LÓGICA DE INCREMENTO ADICIONADA ---
-  batch.update(referrerRef, {
-    unreadNotificationCount: admin.firestore.FieldValue.increment(1),
-  });
+  batch.update(referrerRef, {unreadNotificationCount: admin.firestore.FieldValue.increment(1)});
 
-
-  const notificationForNewUser = {
-    text: `Você e ${referrerUsername} agora são Co-Nexos!`,
-    sourceType: "new_conexo",
-    sourceId: referrerId,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    isRead: false,
-  };
+  const notificationForNewUser = {text: `Você e ${referrerUsername} agora são Co-Nexos!`, sourceType: "new_conexo", sourceId: referrerId, createdAt: admin.firestore.FieldValue.serverTimestamp(), isRead: false};
   const notifRefNewUser = newUserRef.collection("notifications").doc();
   batch.set(notifRefNewUser, notificationForNewUser);
-  // --- LÓGICA DE INCREMENTO ADICIONADA ---
-  batch.update(newUserRef, {
-    unreadNotificationCount: admin.firestore.FieldValue.increment(1),
-  });
+  batch.update(newUserRef, {unreadNotificationCount: admin.firestore.FieldValue.increment(1)});
 
   await batch.commit();
-
-  logger.info(`Convite processado: Co-Nexo criado entre ${newUserId} e ${referrerId}`);
   return {status: "success"};
 });
 
-// --- FUNÇÕES DE MANUTENÇÃO (AGENDADAS) ---
-// (Sem mudanças aqui)
 exports.updateProfessorStats = onSchedule("every 24 hours", async (event) => {
-  logger.info("Iniciando a tarefa agendada: updateProfessorStats");
   const professorsSnapshot = await db.collection("users").where("role", "==", "professor").get();
   if (professorsSnapshot.empty) {
-    logger.info("Nenhum professor encontrado. Finalizando a tarefa.");
     return null;
   }
   const promises = [];
@@ -366,7 +346,6 @@ exports.updateProfessorStats = onSchedule("every 24 hours", async (event) => {
     promises.push(processPromise);
   });
   await Promise.all(promises);
-  logger.info("Tarefa de atualização de estatísticas concluída com sucesso.");
   return null;
 });
 
@@ -383,6 +362,5 @@ exports.processHubInvite = onDocumentUpdated("hub_invites/{inviteId}", async (ev
     batch.update(chatRoomRef, {memberIds: admin.firestore.FieldValue.arrayUnion(toUserId)});
     batch.delete(event.data.after.ref);
     await batch.commit();
-    logger.info(`Usuário ${toUserId} adicionado ao Hub ${hubId}.`);
   }
 });

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:nexo/screens/tela_chat_mensagens.dart';
-import 'package:nexo/screens/tela_nexogo_publica.dart';
+import 'package:nexo/screens/tela_nexogo_publica.dart'; 
 import 'package:nexo/screens/widgets_perfil/perfil_forum_tab.dart';
 import 'package:nexo/services/chat_service.dart';
 import 'package:provider/provider.dart';
@@ -20,7 +20,6 @@ class _TelaPerfilUsuarioState extends State<TelaPerfilUsuario> with SingleTicker
   late final ProfileService _profileService;
   late final ChatService _chatService;
   TabController? _tabController;
-  int _tabCount = 2;
 
   @override
   void initState() {
@@ -31,22 +30,16 @@ class _TelaPerfilUsuarioState extends State<TelaPerfilUsuario> with SingleTicker
   
   void _initTabs(UserModel user) {
     int count = 2; // Sobre, Tópicos
-    
-    if (user.role == 'professor') {
-      count++; // Adiciona a aba "Daxu Go"
+    if (user.isPrivileged) { // Usando a nova lógica centralizada
+      count++; // Adiciona a aba "Daxu GO"
     }
 
-    if (mounted) {
-      // Se o controller já existe e o número de abas não mudou, não faz nada
-      if (_tabController != null && _tabController!.length == count) return;
-      
-      // Se mudou, cria um novo
-      _tabController?.dispose(); // Descarta o antigo se existir
-      setState(() {
-        _tabCount = count;
-        _tabController = TabController(length: _tabCount, vsync: this);
-      });
-    }
+    if (_tabController != null && _tabController!.length == count) return;
+    
+    _tabController?.dispose();
+    setState(() {
+      _tabController = TabController(length: count, vsync: this);
+    });
   }
 
   @override
@@ -85,9 +78,10 @@ class _TelaPerfilUsuarioState extends State<TelaPerfilUsuario> with SingleTicker
         
         final userProfile = snapshot.data!;
         
-        if (_tabController == null || _tabController!.length != (userProfile.role == 'professor' ? 3 : 2)) {
+        final expectedTabCount = userProfile.isPrivileged ? 3 : 2;
+        if (_tabController == null || _tabController!.length != expectedTabCount) {
            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _initTabs(userProfile);
+              if (mounted) _initTabs(userProfile);
            });
         }
 
@@ -95,22 +89,19 @@ class _TelaPerfilUsuarioState extends State<TelaPerfilUsuario> with SingleTicker
         final bool isFollower = userProfile.followingIds.contains(currentUserProfile.id);
         final bool isCoNexo = isFollowing && isFollower;
 
-        // Cria a lista de abas dinamicamente
         List<Widget> tabs = [
           const Tab(text: 'Sobre'),
           const Tab(text: 'Tópicos no Fórum'),
         ];
-        if (userProfile.role == 'professor') {
-          // --- CORREÇÃO DO NOME DA ABA AQUI ---
-          tabs.add(const Tab(text: 'Daxu Go'));
+        if (userProfile.isPrivileged) {
+          tabs.add(const Tab(text: 'Daxu GO'));
         }
         
-        // Cria a lista de views das abas
         List<Widget> tabViews = [
            _buildSobreTab(userProfile, currentUserProfile, isCoNexo, isFollowing),
            PerfilForumTab(userId: userProfile.id),
         ];
-        if (userProfile.role == 'professor') {
+        if (userProfile.isPrivileged) {
           tabViews.add(TelaNexoGoPublica(profUser: userProfile));
         }
 

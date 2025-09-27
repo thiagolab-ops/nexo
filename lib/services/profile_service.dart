@@ -3,74 +3,20 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import '../models/models.dart';
 
 class ProfileService {
-  FirebaseFirestore _db = FirebaseFirestore.instance;
-  FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(region: 'us-central1');
 
-  void setFirestoreForTests(FirebaseFirestore firestore) {
-    _db = firestore;
-  }
-   void setAuthForTests(FirebaseAuth auth) {
-    _auth = auth;
-  }
-  
   CollectionReference<UserModel> get _usersRef => 
       _db.collection('users').withConverter<UserModel>(
         fromFirestore: (snapshot, _) => UserModel.fromFirestore(snapshot),
         toFirestore: (user, _) => user.toMap(),
       );
-
-  // --- MÉTODOS REINTEGRADOS PARA A TELA DE ESTUDO ---
-  
-  /// Adiciona uma quantidade de XP ao perfil do usuário.
-  Future<void> addXp(String userId, int amount) async {
-    if (amount <= 0) return;
-    // Usa FieldValue.increment para uma operação atômica e segura
-    await _usersRef.doc(userId).update({'xp': FieldValue.increment(amount)});
-  }
-
-  /// Atualiza a sequência de estudos (streak) do usuário.
-  Future<void> updateStudyStreak(String userId) async {
-    final userDoc = await _usersRef.doc(userId).get();
-    if (!userDoc.exists) return;
-
-    final user = userDoc.data()!;
-    // Garante que o UserModel tenha o campo lastStudyDate
-    if (user.lastStudyDate == null) return; 
-
-    final now = DateTime.now();
-    final lastStudy = user.lastStudyDate!.toDate();
-    
-    // Calcula a diferença em dias ignorando as horas
-    final difference = DateTime(now.year, now.month, now.day)
-        .difference(DateTime(lastStudy.year, lastStudy.month, lastStudy.day))
-        .inDays;
-    
-    // Se o último estudo foi ontem, incrementa o streak.
-    if (difference == 1) {
-      await _usersRef.doc(userId).update({
-        'studyStreak': FieldValue.increment(1),
-        'lastStudyDate': Timestamp.fromDate(now),
-      });
-    } 
-    // Se o último estudo foi hoje, não faz nada.
-    else if (difference == 0) {
-      return;
-    }
-    // Se faz mais de um dia que não estuda, reseta o streak para 1.
-    else {
-      await _usersRef.doc(userId).update({
-        'studyStreak': 1,
-        'lastStudyDate': Timestamp.fromDate(now),
-      });
-    }
-  }
-
-  // --- FIM DOS MÉTODOS REINTEGRADOS ---
 
   Stream<ProfessorStats?> getProfessorStatsStream(String userId) {
     return _db.collection('users').doc(userId).collection('professor_stats').doc('summary').snapshots()
@@ -121,9 +67,7 @@ class ProfileService {
       createdAt: Timestamp.now(),
       lastStudyDate: Timestamp.now(),
       hasCompletedOnboarding: true,
-      // Garante que os campos existam na criação do usuário
-      xp: 0,
-      studyStreak: 0,
+      interests: interests,
     );
     await _usersRef.doc(uid).set(newUser);
   }
@@ -132,9 +76,28 @@ class ProfileService {
     await _usersRef.doc(uid).update(data);
   }
 
-  Future<List<UserModel>> getUsersFromIdList(List<String> userIds) async { if (userIds.isEmpty) return []; List<UserModel> users = []; for (var i = 0; i < userIds.length; i += 30) { var sublist = userIds.sublist(i, i + 30 > userIds.length ? userIds.length : i + 30); if (sublist.isNotEmpty) { final snapshot = await _usersRef.where(FieldPath.documentId, whereIn: sublist).get(); users.addAll(snapshot.docs.map((doc) => doc.data()!)); } } return users; }
+  Future<List<UserModel>> getUsersFromIdList(List<String> userIds) async { if (userIds.isEmpty) return []; List<UserModel> users = []; for (var i = 0; i < userIds.length; i += 30) { var sublist = userIds.sublist(i, i + 30 > userIds.length ? userIds.length : i + 30); if (sublist.isNotEmpty) { final snapshot = await _usersRef.where(FieldPath.documentId, whereIn: sublist).get(); users.addAll(snapshot.docs.map((doc) => doc.data())); } } return users; }
 
-  Future<List<UserModel>> searchUsersByUsername({required String query, required String currentUserId}) async { if (query.isEmpty) return []; final snapshot = await _usersRef.where('username', isGreaterThanOrEqualTo: query).where('username', isLessThan: '${query}\uf8ff').limit(15).get(); return snapshot.docs.map((doc) => doc.data()!).where((user) => user.id != currentUserId).toList(); }
+  Future<List<UserModel>> searchUsersByUsername({required String query, required String currentUserId}) async {
+    if (query.isEmpty) return [];
+    
+    String cleanedQuery = query.trim();
+    if (cleanedQuery.startsWith('@')) {
+      cleanedQuery = cleanedQuery.substring(1);
+    }
+    if (cleanedQuery.isEmpty) return [];
+
+    final snapshot = await _usersRef
+        .where('username', isGreaterThanOrEqualTo: cleanedQuery)
+        .where('username', isLessThan: '$cleanedQuery\uf8ff')
+        .limit(15)
+        .get();
+    
+    return snapshot.docs
+        .map((doc) => doc.data())
+        .where((user) => user.id != currentUserId)
+        .toList();
+  }
 
   Future<bool> isUsernameUnique(String username) async {
     final snapshot = await _usersRef.where('username', isEqualTo: username).limit(1).get();
@@ -154,8 +117,8 @@ class ProfileService {
   Future<List<UserModel>> getBlockedUsers(String userId) async {
     final userDoc = await _usersRef.doc(userId).get();
     final user = userDoc.data();
-    if (user != null && user.blockedUserIds != null && user.blockedUserIds!.isNotEmpty) {
-      return getUsersFromIdList(user.blockedUserIds!);
+    if (user != null && user.blockedUserIds.isNotEmpty) {
+      return getUsersFromIdList(user.blockedUserIds);
     }
     return [];
   }
@@ -178,7 +141,6 @@ class ProfileService {
     });
   }
 
-  // --- FUNÇÃO "SOU PROFESSOR" ---
   Future<void> applyToBeProfessor({
     required String userId,
     required String specialties,
@@ -188,11 +150,50 @@ class ProfileService {
       'userId': userId,
       'specialties': specialties,
       'socialLinks': socialLinks,
-      'status': 'pending', // Fica pendente para sua aprovação manual
+      'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
     };
-    // Salva a aplicação em uma nova coleção
     await _db.collection('professor_applications').doc(userId).set(applicationData);
   }
-  // --- FIM DA FUNÇÃO ---
+
+  // --- MÉTODOS DE GAMIFICAÇÃO REINSERIDOS ---
+  
+  Future<void> addXp(String uid, int xpAmount) async {
+    await _usersRef.doc(uid).update({'xp': FieldValue.increment(xpAmount)});
+  }
+
+  bool _isYesterday(DateTime date1, DateTime date2) {
+    final yesterday = DateTime(date2.year, date2.month, date2.day - 1);
+    return date1.year == yesterday.year && date1.month == yesterday.month && date1.day == yesterday.day;
+  }
+
+  Future<void> updateStudyStreak(String uid) async {
+    final userDoc = await _usersRef.doc(uid).get();
+    if (!userDoc.exists) return;
+    
+    final user = userDoc.data()!;
+    final lastStudy = user.lastStudyDate.toDate();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final lastStudyDay = DateTime(lastStudy.year, lastStudy.month, lastStudy.day);
+
+    if (lastStudyDay.isAtSameMomentAs(today)) {
+      // Já estudou hoje, não faz nada
+      return;
+    }
+
+    if (_isYesterday(lastStudyDay, today)) {
+      // Estudou ontem, continua a sequência
+      await userDoc.reference.update({
+        'streak': FieldValue.increment(1),
+        'lastStudyDate': Timestamp.now(),
+      });
+    } else {
+      // Quebrou a sequência
+      await userDoc.reference.update({
+        'streak': 1,
+        'lastStudyDate': Timestamp.now(),
+      });
+    }
+  }
 }

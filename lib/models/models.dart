@@ -1,8 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// --- MODELOS DE POST E COMMENT ---
-// (Classes Post, Comment, ReportModel, ProfessorStats, NotificationModel, HubEvent, UserModel, Baralho, Cartao, NexoHub, NexoPadDocument, ChatRoomType, ChatRoom, ChatMessage, Quiz, QuizQuestion, AgendaEvent)
-// ... (nenhuma mudança nessas classes) ...
 class Post {
   final String id;
   final String authorId;
@@ -257,11 +254,13 @@ class UserModel {
   final List<String> interests;
   final int xp;
   final int level;
-  final int studyStreak; // --- NOVO CAMPO: studyStreak ---
+  final int streak;
   final Timestamp lastStudyDate;
   final String role;
   final bool hasCompletedOnboarding;
   final int unreadNotificationCount;
+
+  bool get isPrivileged => role == 'professor' || role == 'super_admin';
 
   UserModel({
     required this.id,
@@ -276,7 +275,7 @@ class UserModel {
     this.interests = const [],
     this.xp = 0,
     this.level = 1,
-    this.studyStreak = 0, // --- NOVO CAMPO: studyStreak ---
+    this.streak = 0,
     required this.lastStudyDate,
     this.role = 'student',
     this.hasCompletedOnboarding = false,
@@ -298,7 +297,7 @@ class UserModel {
       interests: List<String>.from(data['interests'] ?? []),
       xp: data['xp'] ?? 0,
       level: data['level'] ?? 1,
-      studyStreak: data['studyStreak'] ?? 0, // --- NOVO CAMPO: studyStreak ---
+      streak: data['streak'] ?? 0,
       lastStudyDate: data['lastStudyDate'] ?? data['createdAt'] ?? Timestamp.now(),
       role: data['role'] ?? 'student',
       hasCompletedOnboarding: data['hasCompletedOnboarding'] ?? false,
@@ -313,7 +312,7 @@ class UserModel {
       'followerIds': followerIds,
       'followingIds': followingIds,
       'blockedUserIds': blockedUserIds,
-      'interests': interests, 'xp': xp, 'level': level, 'studyStreak': studyStreak, // --- NOVO CAMPO: studyStreak ---
+      'interests': interests, 'xp': xp, 'level': level, 'streak': streak,
       'lastStudyDate': lastStudyDate,
       'role': role,
       'hasCompletedOnboarding': hasCompletedOnboarding,
@@ -674,7 +673,7 @@ class VideoNexo { // (Arquivo)
     } catch (e) {
       print('Erro ao extrair thumbnail: $e');
     }
-    return ''; // Retorno seguro
+    return ''; 
   }
 
   Map<String, dynamic> toMap() {
@@ -778,7 +777,7 @@ class Lesson {
   
   String get thumbnailUrl {
     try {
-      if (videoUrl.contains('youtube.com') || videoUrl.contains('youtu.be')) {
+       if (videoUrl.contains('youtube.com') || videoUrl.contains('youtu.be')) {
         String? videoId;
         if (videoUrl.contains('youtu.be/')) {
           videoId = videoUrl.split('youtu.be/').last.split('?').first.split('&').first;
@@ -838,7 +837,7 @@ class LessonComment {
     required this.createdAt,
   });
 
-    Map<String, dynamic> toMap() {
+   Map<String, dynamic> toMap() {
     return {
       'authorId': authorId,
       'authorUsername': authorUsername,

@@ -198,7 +198,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
                     ),
                     const SizedBox(height: 24),
                     
-                    if (userProfile.role == 'professor') ...[
+                    if (userProfile.isPrivileged) ...[
                       ListTile(
                         leading: const Icon(Icons.dashboard_outlined),
                         title: const Text('Meu Dashboard'),
@@ -221,7 +221,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
                       ),
                       ListTile(
                         leading: const Icon(Icons.video_library_outlined),
-                        title: const Text('Meu Daxu Go (Vídeos)'), // <<< NOME ATUALIZADO
+                        title: const Text('Meu Daxu GO (Vídeos)'),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () {
                           Navigator.of(context).push(MaterialPageRoute(

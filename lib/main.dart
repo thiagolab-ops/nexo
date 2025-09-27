@@ -19,6 +19,8 @@ import 'package:nexo/services/report_service.dart';
 import 'package:nexo/services/theme_provider.dart'; 
 import 'package:provider/provider.dart';
 import 'package:nexo/screens/tela_feed.dart';
+import 'package:webview_flutter_web/webview_flutter_web.dart';
+import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
 
 import 'auth_gate.dart';
 import 'firebase_options.dart';
@@ -33,21 +35,18 @@ import 'screens/tela_social_nova.dart';
 import 'screens/tela_nexo_pad.dart';
 import 'widgets/user_avatar.dart';
 
-// --- IMPORT NECESSÁRIO ---
-import 'package:webview_flutter_web/webview_flutter_web.dart';
-import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // --- LINHA DE INICIALIZAÇÃO DO WEBVIEW ADICIONADA ---
-  // Isso registra a implementação web ANTES de qualquer outra coisa
   WebViewPlatform.instance = WebWebViewPlatform();
   
   await EasyLocalization.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  
+  await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+
   runApp(
     EasyLocalization(
       supportedLocales: const [
@@ -60,8 +59,6 @@ void main() async {
   );
 }
 
-// O resto do seu arquivo main.dart permanece exatamente o mesmo
-// Nenhuma outra mudança é necessária.
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -129,6 +126,8 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
   @override
   void initState() {
     super.initState();
+    _checkCustomClaims(); // <<-- NOSSO CÓDIGO DE DEBUG AQUI
+
     _telas = [
       TelaBaralhosLista(showNewDeckDialog: _mostrarDialogoNovoBaralho), 
       const TelaHubsLista(),
@@ -138,6 +137,18 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
       const TelaPlayLista(),
       const TelaSocialNova(), 
     ];
+  }
+  
+  // <<-- FUNÇÃO DE DEBUG ADICIONADA
+  void _checkCustomClaims() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      // O 'true' força a atualização do token
+      final idTokenResult = await user.getIdTokenResult(true); 
+      print('--- [CUSTOM CLAIMS DEBUG] ---');
+      print('Claims do Token: ${idTokenResult.claims}');
+      print('-----------------------------');
+    }
   }
 
   void _mostrarDialogoNovoBaralho({Baralho? baralhoExistente}) {
@@ -273,7 +284,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
           child: const Icon(Icons.add),
         );
       case 4: 
-        if (userProfile.role == 'professor') {
+        if (userProfile.isPrivileged) {
           return FloatingActionButton(
             heroTag: 'add_post',
             onPressed: () {
