@@ -1,100 +1,102 @@
 import 'package:flutter/material.dart';
-import 'package:nexo/screens/tela_chat_mensagens.dart';
+import 'package:nexo/screens/tela_aprovacao_professor.dart';
 import 'package:nexo/screens/tela_comentarios.dart';
+import 'package:nexo/screens/tela_hub_detalhe.dart';
 import 'package:nexo/screens/tela_perfil_usuario.dart';
 import 'package:nexo/services/chat_service.dart';
 import 'package:nexo/services/feed_service.dart';
-import 'package:nexo/services/notification_service.dart';
+import 'package:nexo/services/nexo_hub_service.dart';
 import 'package:provider/provider.dart';
-import '../models/models.dart';
-import 'package:timeago/timeago.dart' as timeago;
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:nexo/models/models.dart';
+import 'package:nexo/services/notification_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import 'tela_chat_mensagens.dart';
 
 class TelaNotificacoes extends StatefulWidget {
   const TelaNotificacoes({super.key});
 
   @override
-  _TelaNotificacoesState createState() => _TelaNotificacoesState();
+  State<TelaNotificacoes> createState() => _TelaNotificacoesState();
 }
 
 class _TelaNotificacoesState extends State<TelaNotificacoes> {
   late final NotificationService _notificationService;
-  late final ChatService _chatService;
-  late final FeedService _feedService;
-  bool _didMarkAsRead = false; 
+  final String _currentUserId = FirebaseAuth.instance.currentUser!.uid;
 
   @override
   void initState() {
     super.initState();
     _notificationService = context.read<NotificationService>();
-    _chatService = context.read<ChatService>();
-    _feedService = context.read<FeedService>();
+    _notificationService.markAllNotificationsAsRead(_currentUserId);
   }
 
-  Future<void> _handleNotificationTap(String currentUserId, NotificationModel notification) async {
-    if (!notification.isRead) {
-      _notificationService.markNotificationAsRead(currentUserId, notification.id);
+  Future<void> _launchURL(String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri)) {
+      throw Exception('Could not launch $url');
     }
+  }
 
+  void _handleNotificationTap(NotificationModel notification) async {
+    await _notificationService.markNotificationAsRead(_currentUserId, notification.id);
+    if (!mounted) return;
+    
     switch (notification.sourceType) {
-      // --- CASO "CO-NEXO" ADICIONADO ---
-      case 'new_conexo':
       case 'new_follower':
-        if (mounted) {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (context) => TelaPerfilUsuario(userId: notification.sourceId)),
-          );
-        }
+      case 'new_conexo':
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (context) => TelaPerfilUsuario(userId: notification.sourceId),
+        ));
         break;
-
-      case 'new_dm':
-        final chatRoom = await _chatService.getChatRoomById(notification.sourceId);
-        if (chatRoom != null && mounted) {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (context) => TelaChatMensagens(chatRoom: chatRoom)),
-          );
-        }
-        break;
-      
-      case 'new_comment':
       case 'new_like':
-        final post = await _feedService.getPostById(notification.sourceId);
+      case 'new_comment':
+        final post = await context.read<FeedService>().getPostById(notification.sourceId);
         if (post != null && mounted) {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (context) => TelaComentarios(post: post)),
-          );
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (context) => TelaComentarios(post: post),
+          ));
         }
         break;
-        
+      case 'dm_message':
+        final chatRoom = await context.read<ChatService>().getChatRoomById(notification.sourceId);
+        if (chatRoom != null && mounted) {
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (context) => TelaChatMensagens(chatRoom: chatRoom),
+          ));
+        }
+        break;
       case 'aula_convocada':
-        if (notification.meetLink != null && notification.meetLink!.isNotEmpty) {
-          final uri = Uri.tryParse(notification.meetLink!);
-          if (uri != null && await canLaunchUrl(uri)) {
-            await launchUrl(uri);
+        if(notification.meetLink != null && notification.meetLink!.isNotEmpty) {
+          _launchURL(notification.meetLink!);
+        } else if (notification.relatedHubId != null) {
+          final hub = await context.read<NexoHubService>().getHubById(notification.relatedHubId!);
+          if (hub != null && mounted) {
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (context) => TelaHubDetalhe(hub: hub),
+            ));
           }
         }
         break;
+      case 'professor_application':
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (context) => const TelaAprovacaoProfessor(),
+        ));
+        break;
+      default:
+        print("Tipo de notificação não tratado: ${notification.sourceType}");
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentUser = Provider.of<UserModel?>(context);
-    if (currentUser == null) {
-      return const Scaffold(body: Center(child: Text("Usuário não encontrado.")));
-    }
-
-    if (!_didMarkAsRead) {
-      _notificationService.markAllNotificationsAsRead(currentUser.id);
-      _didMarkAsRead = true;
-    }
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notificações'),
       ),
       body: StreamBuilder<List<NotificationModel>>(
-        stream: _notificationService.getNotificationsStream(currentUser.id),
+        stream: _notificationService.getNotificationsStream(_currentUserId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -102,9 +104,7 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return const Center(child: Text('Nenhuma notificação ainda.'));
           }
-
           final notifications = snapshot.data!;
-
           return ListView.builder(
             itemCount: notifications.length,
             itemBuilder: (context, index) {
@@ -112,11 +112,11 @@ class _TelaNotificacoesState extends State<TelaNotificacoes> {
               return ListTile(
                 leading: Icon(
                   notification.isRead ? Icons.notifications_none : Icons.notifications_active,
-                  color: notification.isRead ? Colors.grey : Colors.lightBlueAccent,
+                  color: notification.isRead ? Colors.grey : Theme.of(context).primaryColor,
                 ),
                 title: Text(notification.text),
-                subtitle: Text(timeago.format(notification.createdAt.toDate(), locale: 'pt_BR')),
-                onTap: () => _handleNotificationTap(currentUser.id, notification),
+                subtitle: Text(notification.createdAt.toDate().toString()),
+                onTap: () => _handleNotificationTap(notification),
               );
             },
           );

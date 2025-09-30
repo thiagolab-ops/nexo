@@ -2,14 +2,15 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
-import 'package:nexo/screens/tela_aplicar_professor.dart'; 
+import 'package:nexo/screens/tela_aplicar_professor.dart';
+import 'package:nexo/screens/tela_aprovacao_professor.dart'; // <-- IMPORTAÇÃO NOVA
 import 'package:nexo/screens/tela_dashboard_professor.dart';
 import 'package:nexo/screens/tela_moderacao.dart';
 import 'package:nexo/screens/tela_nexogo_admin.dart';
-import 'package:nexo/screens/tela_politica.dart'; 
-import 'package:nexo/screens/tela_termos.dart'; 
-import 'package:nexo/services/theme_provider.dart'; 
-import 'package:share_plus/share_plus.dart'; 
+import 'package:nexo/screens/tela_politica.dart';
+import 'package:nexo/screens/tela_termos.dart';
+import 'package:nexo/services/theme_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/models.dart';
 import '../services/profile_service.dart';
 import '../utils.dart';
@@ -198,7 +199,21 @@ class _TelaPerfilState extends State<TelaPerfil> {
                     ),
                     const SizedBox(height: 24),
                     
-                    if (userProfile.isPrivileged) ...[
+                    if (userProfile.role == 'super_admin') ...[
+                       ListTile(
+                        leading: const Icon(Icons.admin_panel_settings_outlined, color: Colors.amber),
+                        title: const Text('Aprovar Professores'),
+                        trailing: const Icon(Icons.arrow_forward_ios),
+                        onTap: () {
+                          Navigator.of(context).push(MaterialPageRoute(
+                            builder: (context) => const TelaAprovacaoProfessor(),
+                          ));
+                        },
+                      ),
+                      const Divider(height: 24),
+                    ],
+
+                    if (userProfile.role == 'professor' || userProfile.role == 'super_admin') ...[
                       ListTile(
                         leading: const Icon(Icons.dashboard_outlined),
                         title: const Text('Meu Dashboard'),
@@ -221,7 +236,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
                       ),
                       ListTile(
                         leading: const Icon(Icons.video_library_outlined),
-                        title: const Text('Meu Daxu GO (Vídeos)'),
+                        title: const Text('Meu Daxu Go (Vídeos)'),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () {
                           Navigator.of(context).push(MaterialPageRoute(

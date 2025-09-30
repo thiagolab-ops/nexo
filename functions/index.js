@@ -7,52 +7,58 @@ const logger = require("firebase-functions/logger");
 admin.initializeApp();
 const db = admin.firestore();
 
-// NOVA FUNÇÃO PARA CUSTOM CLAIMS
-exports.setUserRoleOnProfileUpdate = onDocumentUpdated("users/{userId}", async (event) => {
-  const beforeData = event.data.before.data();
-  const afterData = event.data.after.data();
+// --- NOVA FUNÇÃO ADICIONADA ---
+exports.onUserPromotedToProfessor = onDocumentUpdated("users/{userId}", async (event) => {
+  const dataBefore = event.data.before.data();
+  const dataAfter = event.data.after.data();
 
-  if (beforeData.role === afterData.role) {
-    logger.info(`Role for ${event.params.userId} has not changed. No action taken.`);
-    return null;
+  // A função só executa se a 'role' mudou de 'student' para 'professor'
+  if (dataBefore.role === "student" && dataAfter.role === "professor") {
+    const userId = event.params.userId;
+    const userRef = db.collection("users").doc(userId);
+
+    logger.info(`Usuário ${userId} promovido a professor. Enviando notificação de parabéns.`);
+
+    const notificationRef = userRef.collection("notifications").doc();
+    const notificationPayload = {
+      text: "Parabéns. Agora você é um Professor Daxu.",
+      sourceType: "promotion_professor",
+      sourceId: userId, // Aponta para o próprio perfil do usuário
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      isRead: false,
+    };
+
+    const batch = db.batch();
+    batch.set(notificationRef, notificationPayload);
+    batch.update(userRef, {unreadNotificationCount: admin.firestore.FieldValue.increment(1)});
+
+    return batch.commit();
   }
 
-  const userId = event.params.userId;
-  const newRole = afterData.role;
-
-  logger.info(`Role changed for ${userId} to ${newRole}. Setting custom claims.`);
-
-  try {
-    await admin.auth().setCustomUserClaims(userId, {role: newRole});
-    logger.info(`Successfully set custom claim for ${userId}.`);
-    return {result: `Custom claim for role ${newRole} set for user ${userId}.`};
-  } catch (error) {
-    logger.error(`Error setting custom claim for ${userId}:`, error);
-    return null;
-  }
+  return null; // Nenhuma ação necessária se a condição não for atendida
 });
+// --- FIM DA NOVA FUNÇÃO ---
 
-exports.onProfessorApplicationCreated = onDocumentCreated("professor_applications/{userId}", async (event) => {
-  const applicantId = event.params.userId;
+exports.onProfessorApplicationCreated = onDocumentCreated("professor_applications/{applicationId}", async (event) => {
+  const applicationData = event.data.data();
+  const applicantId = applicationData.userId;
+  const applicantUsername = applicationData.applicantUsername;
 
-  const applicantDoc = await db.collection("users").doc(applicantId).get();
-  if (!applicantDoc.exists) {
-    logger.error(`[onProfessorApplicationCreated] Applicant user doc ${applicantId} not found.`);
+  if (!applicantUsername) {
+    logger.error("[onProfessorApplicationCreated] Campo 'applicantUsername' não encontrado na aplicação.");
     return null;
   }
-  const applicantUsername = applicantDoc.data().username;
 
   const adminQuery = await db.collection("users").where("role", "==", "super_admin").get();
 
   if (adminQuery.empty) {
-    logger.error("[onProfessorApplicationCreated] No super_admin user found to notify.");
+    logger.error("[onProfessorApplicationCreated] Nenhum super_admin encontrado para notificar.");
     return null;
   }
 
   const batch = db.batch();
 
   adminQuery.forEach((adminDoc) => {
-    // const adminId = adminDoc.id; // Variável não utilizada removida para corrigir o lint.
     const userRef = adminDoc.ref;
     const notificationRef = userRef.collection("notifications").doc();
     const notificationPayload = {
@@ -255,7 +261,7 @@ exports.unfollowUser = onCall(async (request) => {
   const targetUserRef = db.collection("users").doc(targetUserId);
   const batch = db.batch();
   batch.update(currentUserRef, {followingIds: admin.firestore.FieldValue.arrayRemove(targetUserId)});
-  batch.update(targetUserRef, {followerIds: admin.firestore.FieldValue.arrayRemove(targetUserId)});
+  batch.update(targetUserRef, {followerIds: admin.firestore.FieldValue.arrayRemove(currentUserId)});
 
   await batch.commit();
   return {status: "success"};

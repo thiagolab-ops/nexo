@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:nexo/models/models.dart';
 import 'package:nexo/services/profile_service.dart';
 import 'package:provider/provider.dart';
 
@@ -19,12 +20,21 @@ class _TelaAplicarProfessorState extends State<TelaAplicarProfessor> {
   Future<void> _submitApplication() async {
     if (!_formKey.currentState!.validate()) return;
     
+    // Pega o perfil do usuário atual do Provider
+    final currentUser = Provider.of<UserModel?>(context, listen: false);
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erro: Não foi possível identificar o usuário.'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
-      final userId = FirebaseAuth.instance.currentUser!.uid;
       await context.read<ProfileService>().applyToBeProfessor(
-        userId: userId,
+        userId: currentUser.id,
+        username: currentUser.username, // <-- Passando o username
         specialties: _specialtiesController.text,
         socialLinks: _socialLinksController.text,
       );
@@ -38,8 +48,8 @@ class _TelaAplicarProfessorState extends State<TelaAplicarProfessor> {
             actions: [
               TextButton(
                 onPressed: () {
-                  Navigator.of(ctx).pop(); // Fecha o dialog
-                  Navigator.of(context).pop(); // Volta para a tela de perfil
+                  Navigator.of(ctx).pop(); 
+                  Navigator.of(context).pop();
                 },
                 child: const Text('OK'),
               ),
@@ -76,7 +86,7 @@ class _TelaAplicarProfessorState extends State<TelaAplicarProfessor> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Professores têm acesso a ferramentas exclusivas, como postar no Daxu Feed e criar Cursos no Nexo Go. Analisamos todas as solicitações para manter a alta qualidade da nossa comunidade.',
+                'Professores têm acesso a ferramentas exclusivas, como postar no Daxu Feed e criar Cursos no Daxu Go. Analisamos todas as solicitações para manter a alta qualidade da nossa comunidade.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 24),

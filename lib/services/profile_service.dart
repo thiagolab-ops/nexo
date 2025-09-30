@@ -141,23 +141,26 @@ class ProfileService {
     });
   }
 
+  // --- INÍCIO DA CORREÇÃO ---
   Future<void> applyToBeProfessor({
     required String userId,
+    required String username, // <-- Novo parâmetro
     required String specialties,
     required String socialLinks,
   }) async {
     final applicationData = {
       'userId': userId,
+      'applicantUsername': username, // <-- Novo campo para a Cloud Function
       'specialties': specialties,
       'socialLinks': socialLinks,
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
     };
-    await _db.collection('professor_applications').doc(userId).set(applicationData);
+    // Usar .add() para que o Firestore gere um ID único, em vez de usar o userId.
+    await _db.collection('professor_applications').add(applicationData);
   }
+  // --- FIM DA CORREÇÃO ---
 
-  // --- MÉTODOS DE GAMIFICAÇÃO REINSERIDOS ---
-  
   Future<void> addXp(String uid, int xpAmount) async {
     await _usersRef.doc(uid).update({'xp': FieldValue.increment(xpAmount)});
   }
@@ -178,18 +181,15 @@ class ProfileService {
     final lastStudyDay = DateTime(lastStudy.year, lastStudy.month, lastStudy.day);
 
     if (lastStudyDay.isAtSameMomentAs(today)) {
-      // Já estudou hoje, não faz nada
       return;
     }
 
     if (_isYesterday(lastStudyDay, today)) {
-      // Estudou ontem, continua a sequência
       await userDoc.reference.update({
         'streak': FieldValue.increment(1),
         'lastStudyDate': Timestamp.now(),
       });
     } else {
-      // Quebrou a sequência
       await userDoc.reference.update({
         'streak': 1,
         'lastStudyDate': Timestamp.now(),
