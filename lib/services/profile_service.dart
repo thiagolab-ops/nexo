@@ -17,6 +17,14 @@ class ProfileService {
         fromFirestore: (snapshot, _) => UserModel.fromFirestore(snapshot),
         toFirestore: (user, _) => user.toMap(),
       );
+      
+  Future<String?> getUserIdByUsername(String username) async {
+    final query = await _usersRef.where('username', isEqualTo: username).limit(1).get();
+    if (query.docs.isNotEmpty) {
+      return query.docs.first.id;
+    }
+    return null;
+  }
 
   Stream<ProfessorStats?> getProfessorStatsStream(String userId) {
     return _db.collection('users').doc(userId).collection('professor_stats').doc('summary').snapshots()
@@ -141,23 +149,23 @@ class ProfileService {
     });
   }
 
-  // --- INÍCIO DA CORREÇÃO ---
+  // --- FUNÇÃO CORRIGIDA ---
   Future<void> applyToBeProfessor({
     required String userId,
-    required String username, // <-- Novo parâmetro
+    required String username, // <-- Parâmetro adicionado
     required String specialties,
     required String socialLinks,
   }) async {
     final applicationData = {
       'userId': userId,
-      'applicantUsername': username, // <-- Novo campo para a Cloud Function
+      'applicantUsername': username, // <-- Campo adicionado para a Cloud Function ler
       'specialties': specialties,
       'socialLinks': socialLinks,
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
     };
-    // Usar .add() para que o Firestore gere um ID único, em vez de usar o userId.
-    await _db.collection('professor_applications').add(applicationData);
+    // Usando .set(doc(userId)) para evitar múltiplas solicitações do mesmo usuário.
+    await _db.collection('professor_applications').doc(userId).set(applicationData);
   }
   // --- FIM DA CORREÇÃO ---
 

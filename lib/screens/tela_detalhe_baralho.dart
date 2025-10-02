@@ -1,15 +1,18 @@
+import 'dart:convert';
 import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:nexo/models/models.dart';
 import 'package:nexo/screens/tela_estudo.dart';
 import 'package:nexo/screens/tela_jogo.dart';
 import 'package:nexo/screens/tela_quizzes_lista.dart';
+import 'package:nexo/screens/tela_realizar_quiz.dart';
+import 'package:nexo/services/firestore_service.dart';
 import 'package:nexo/services/quiz_service.dart';
-import 'dart:convert';
-import '../models/models.dart';
-import '../services/firestore_service.dart';
-import '../utils.dart';
+import 'package:nexo/utils.dart';
+import 'package:provider/provider.dart';
+
 
 class TelaDetalheBaralho extends StatefulWidget {
   final Baralho baralho;
@@ -21,9 +24,18 @@ class TelaDetalheBaralho extends StatefulWidget {
 }
 
 class _TelaDetalheBaralhoState extends State<TelaDetalheBaralho> {
-  final FirestoreService _firestoreService = FirestoreService();
-  final QuizService _quizService = QuizService();
-  final String _userId = FirebaseAuth.instance.currentUser!.uid;
+  late final FirestoreService _firestoreService;
+  late final QuizService _quizService;
+  late final String _userId;
+
+  @override
+  void initState() {
+    super.initState();
+    _firestoreService = context.read<FirestoreService>();
+    _quizService = context.read<QuizService>();
+    _userId = FirebaseAuth.instance.currentUser!.uid;
+  }
+
 
   void _adicionarCartao() {
     final frenteController = TextEditingController();
@@ -127,15 +139,40 @@ class _TelaDetalheBaralhoState extends State<TelaDetalheBaralho> {
     }
     
     try {
-      // LINHA CORRIGIDA: trocamos 'title' por 'deckName'
-      await _quizService.generateAndSaveQuiz(deckId: widget.baralho.id!, deckName: widget.baralho.nome, cards: cards);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Prova gerada com sucesso!'), backgroundColor: Colors.green)
-      );
+      final quiz = await _quizService.createQuiz(deckId: widget.baralho.id!, title: widget.baralho.nome, cards: cards);
+      if (mounted) {
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (context) => TelaRealizarQuiz(quiz: quiz),
+        ));
+      }
     } catch (e) {
       showErrorDialog(context, 'Erro ao Gerar Prova', e.toString());
     }
   }
+  
+  void _showResetDeckDialog() async {
+    final bool? confirmar = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Resetar Progresso'),
+        content: Text('Tem certeza que deseja resetar todo o progresso de estudo do baralho "${widget.baralho.nome}"? Todos os cartões voltarão ao estágio inicial.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text("Resetar", style: TextStyle(color: Colors.orangeAccent)),
+          ),
+        ],
+      ),
+    );
+    if(confirmar == true && mounted) {
+      await _firestoreService.resetDeckProgress(_userId, widget.baralho.id!);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Progresso resetado com sucesso!'), backgroundColor: Colors.green),
+      );
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -143,6 +180,11 @@ class _TelaDetalheBaralhoState extends State<TelaDetalheBaralho> {
       appBar: AppBar(
         title: Text(widget.baralho.nome),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Resetar Progresso',
+            onPressed: _showResetDeckDialog,
+          ),
           IconButton(
             icon: const Icon(Icons.upload_file),
             tooltip: 'Importar CSV',

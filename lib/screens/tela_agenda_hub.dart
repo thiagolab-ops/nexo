@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:nexo/models/models.dart';
 import 'package:nexo/services/nexo_hub_service.dart';
-import 'package:nexo/services/profile_service.dart'; // Import necessário
-import 'package:nexo/widgets/user_avatar.dart'; // Import necessário
+import 'package:nexo/services/profile_service.dart';
+import 'package:nexo/widgets/user_avatar.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class TelaAgendaHub extends StatefulWidget {
   final String hubId;
   final String hubName;
   final Function({HubEvent? eventToEdit}) showEventDialog;
   final UserModel currentUserProfile;
+  final void Function(DateTime) onDaySelectedCallback;
 
   const TelaAgendaHub({
     super.key,
@@ -18,6 +20,7 @@ class TelaAgendaHub extends StatefulWidget {
     required this.hubName,
     required this.showEventDialog,
     required this.currentUserProfile,
+    required this.onDaySelectedCallback,
   });
 
   @override
@@ -36,24 +39,33 @@ class _TelaAgendaHubState extends State<TelaAgendaHub> {
   void initState() {
     super.initState();
     _hubService = context.read<NexoHubService>();
-    _profileService = context.read<ProfileService>(); // Inicializa o ProfileService
+    _profileService = context.read<ProfileService>();
     _selectedDay = _focusedDay;
+  }
+  
+  Future<void> _launchURL(String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri)) {
+      throw Exception('Could not launch $url');
+    }
   }
 
   List<HubEvent> _getEventsForDay(DateTime day) {
-    return _eventsMap[DateTime(day.year, day.month, day.day)] ?? [];
+    // CORREÇÃO: Usa DateTime.utc ao MEIO-DIA para a chave de busca
+    final dayUtc = DateTime.utc(day.year, day.month, day.day, 12);
+    return _eventsMap[dayUtc] ?? [];
   }
 
   void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
     if (!isSameDay(_selectedDay, selectedDay)) {
       setState(() {
-        _selectedDay = selectedDay;
-        _focusedDay = focusedDay;
+        // CORREÇÃO: Garante que a data selecionada seja sempre ao MEIO-DIA UTC
+        _selectedDay = DateTime.utc(selectedDay.year, selectedDay.month, selectedDay.day, 12);
+        _focusedDay = DateTime.utc(focusedDay.year, focusedDay.month, focusedDay.day, 12);
+        widget.onDaySelectedCallback(_selectedDay!);
       });
     }
   }
-
-  // --- LÓGICA DE RSVP ADICIONADA ---
 
   void _handleRsvp(HubEvent event, bool isAttending) {
     _hubService.rsvpToEvent(
@@ -121,7 +133,9 @@ class _TelaAgendaHubState extends State<TelaAgendaHub> {
         final allEvents = snapshot.data ?? [];
         _eventsMap = {};
         for (final event in allEvents) {
-          final eventDay = DateTime(event.date.year, event.date.month, event.date.day);
+          final localDate = event.date;
+          // CORREÇÃO: Cria a chave do mapa usando MEIO-DIA UTC
+          final eventDay = DateTime.utc(localDate.year, localDate.month, localDate.day, 12);
           if (_eventsMap[eventDay] == null) {
             _eventsMap[eventDay] = [];
           }
@@ -155,10 +169,9 @@ class _TelaAgendaHubState extends State<TelaAgendaHub> {
                 itemBuilder: (context, index) {
                   final event = selectedDayEvents[index];
                   final bool isOwner = event.creatorId == widget.currentUserProfile.id;
-                  final bool isProfessor = widget.currentUserProfile.role == 'professor';
+                  final bool isProfessor = widget.currentUserProfile.isPrivileged;
                   final bool isAttending = event.attendees.contains(widget.currentUserProfile.id);
 
-                  // CARD DO EVENTO (SUBSTITUINDO O LISTTILE SIMPLES)
                   return Card(
                     margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     child: Padding(
@@ -166,7 +179,6 @@ class _TelaAgendaHubState extends State<TelaAgendaHub> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // --- LINHA DO TÍTULO E BOTÕES DE ADMIN ---
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -192,27 +204,30 @@ class _TelaAgendaHubState extends State<TelaAgendaHub> {
                             ],
                           ),
                           Text('Criado por ${event.creatorUsername}', style: Theme.of(context).textTheme.bodySmall),
+                          if(event.meetLink != null) ...[
+                            const SizedBox(height: 8),
+                             InkWell(
+                              child: const Text('Entrar na aula', style: TextStyle(color: Colors.blue, decoration: TextDecoration.underline)),
+                              onTap: () => _launchURL(event.meetLink!),
+                            ),
+                          ],
                           const Divider(height: 20),
-                          // --- LINHA DE STATUS DO RSVP ---
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Row(
-                                children: [
-                                  const Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
-                                  const SizedBox(width: 8),
-                                  Text('${event.attendees.length} Confirmados', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                              if (isOwner || isProfessor)
-                                TextButton(
-                                  child: const Text('Ver Lista'),
-                                  onPressed: () => _showAttendeesDialog(event),
+                              InkWell(
+                                onTap: () => _showAttendeesDialog(event),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
+                                    const SizedBox(width: 8),
+                                    Text('${event.attendees.length} Confirmados', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  ],
                                 ),
+                              ),
                             ],
                           ),
                           const SizedBox(height: 8),
-                          // --- LINHA DE AÇÃO DO RSVP ---
                           Row(
                             children: [
                               Expanded(
@@ -231,7 +246,7 @@ class _TelaAgendaHubState extends State<TelaAgendaHub> {
                                   icon: const Icon(Icons.close),
                                   label: const Text('Não Vou'),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: !isAttending ? Colors.redAccent : Colors.grey[700],
+                                    backgroundColor: isAttending ? Colors.grey[700] : null,
                                   ),
                                   onPressed: !isAttending ? null : () => _handleRsvp(event, false),
                                 ),

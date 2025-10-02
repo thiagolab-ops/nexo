@@ -1,10 +1,12 @@
 import 'dart:async';
-import 'package:cloud_functions/cloud_functions.dart'; // <<< IMPORTADO
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:nexo/main.dart';
+import 'package:nexo/screens/tela_perfil_usuario.dart';
 import 'package:nexo/services/profile_service.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // <<< IMPORTADO
+import 'package:shared_preferences/shared_preferences.dart';
 
 class TelaCriarPerfil extends StatefulWidget {
   const TelaCriarPerfil({super.key});
@@ -17,7 +19,6 @@ class _TelaCriarPerfilState extends State<TelaCriarPerfil> {
   final _formKey = GlobalKey<FormState>();
   final _user = FirebaseAuth.instance.currentUser;
   
-  // Instância do Cloud Functions
   final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(region: 'us-central1');
 
   final _usernameController = TextEditingController();
@@ -88,39 +89,51 @@ class _TelaCriarPerfilState extends State<TelaCriarPerfil> {
     
     setState(() => _isSaving = true);
 
-    // 1. Cria o perfil do usuário (como antes)
-    await context.read<ProfileService>().createUserProfile(
+    final profileService = context.read<ProfileService>();
+
+    await profileService.createUserProfile(
       uid: _user!.uid,
       username: _usernameController.text.trim(),
       email: _user!.email ?? '',
       bio: _bioController.text.trim(),
       interests: [], 
     );
-
-    // --- INÍCIO DA NOVA LÓGICA DE CONVITE ---
+    
+    // --- LÓGICA DE CONVITE E REDIRECIONAMENTO ATUALIZADA ---
     try {
       final prefs = await SharedPreferences.getInstance();
       final referralUsername = prefs.getString('referralUsername');
 
       if (referralUsername != null && referralUsername.isNotEmpty) {
-        // 2. Chama a Cloud Function. O ID do novo usuário (o seu)
-        // é enviado automaticamente pela autenticação.
+        // Processa o Co-Nexo automático em segundo plano
         final callable = _functions.httpsCallable('processarConvite');
-        await callable.call({'referralUsername': referralUsername});
+        callable.call({'referralUsername': referralUsername});
         
-        // 3. Limpa a referência para que não seja usada novamente
         await prefs.remove('referralUsername');
+        
+        // Busca o ID de quem convidou para fazer o redirecionamento
+        final referrerId = await profileService.getUserIdByUsername(referralUsername);
+        
+        if (referrerId != null && mounted) {
+          // Navega DIRETAMENTE para o perfil do amigo, substituindo a tela de login
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => TelaPerfilUsuario(userId: referrerId)),
+            (route) => false,
+          );
+          return; // Encerra a função aqui para não navegar para a TelaPrincipal
+        }
       }
     } catch (e) {
-      // Se a função de convite falhar, não impede o login.
-      // Apenas registramos no console para depuração.
-      print('Erro ao processar convite: $e');
+      print('Erro ao processar convite ou redirecionar: $e');
     }
-    // --- FIM DA NOVA LÓGICA ---
     
-    // O AuthGate detectará a mudança (hasCompletedOnboarding=true) 
-    // e navegará automaticamente para a TelaPrincipal.
-    // Não precisamos mudar o _isSaving para false.
+    // Se não houver convite, ou se o amigo não for encontrado, segue o fluxo normal.
+    if (mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const TelaPrincipal()),
+        (route) => false,
+      );
+    }
   }
 
   @override
@@ -140,7 +153,7 @@ class _TelaCriarPerfilState extends State<TelaCriarPerfil> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Bem-vindo(a) ao Nexo!',
+                    'Bem-vindo(a) ao Daxu!',
                     style: Theme.of(context).textTheme.headlineSmall,
                     textAlign: TextAlign.center,
                   ),
@@ -189,7 +202,7 @@ class _TelaCriarPerfilState extends State<TelaCriarPerfil> {
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
-                    child: const Text('Salvar e Entrar no Nexo'),
+                    child: const Text('Salvar e Entrar no Daxu'),
                   )
                 ],
               ),

@@ -35,16 +35,17 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
 
   ScrollPhysics _tabBarPhysics = const PageScrollPhysics();
   
-  // O Controller do mapa mental agora vive aqui, no widget pai.
   late final MindMapController _mindMapController;
+  
+  DateTime? _selectedAgendaDay;
 
   @override
   void initState() {
     super.initState();
     _currentUserProfile = Provider.of<UserModel?>(context, listen: false);
     _tabController = TabController(length: 8, vsync: this);
+    _selectedAgendaDay = DateTime.now();
     
-    // Instancia o controller do mapa mental aqui.
     _mindMapController = MindMapController(
       service: context.read<MindMapService>(),
       hubId: widget.hub.id,
@@ -55,17 +56,14 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
       
       final screenSize = MediaQuery.of(context).size;
       
-      if (_tabController.index == 4) { // Aba Mapa Mental
-        // Trava o swipe
+      if (_tabController.index == 4) {
         if (_tabBarPhysics is! NeverScrollableScrollPhysics) {
           setState(() {
             _tabBarPhysics = const NeverScrollableScrollPhysics();
           });
         }
-        // E comanda a centralização!
         _mindMapController.centerView(screenSize);
       } else {
-        // Libera o swipe para as outras abas
         if (_tabBarPhysics is! PageScrollPhysics) {
           setState(() {
             _tabBarPhysics = const PageScrollPhysics();
@@ -79,25 +77,21 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
   @override
   void dispose() {
     _tabController.dispose();
-    _mindMapController.dispose(); // Limpa o controller
+    _mindMapController.dispose();
     super.dispose();
   }
 
-  // ... (O resto do arquivo não precisa de mudanças)...
   Widget? _buildFloatingActionButton() {
     if (_currentUserProfile == null) return null;
 
     switch (_tabController.index) {
       case 2:
-        if (_currentUserProfile!.role == 'professor') {
-          return FloatingActionButton(
-            heroTag: 'add_event',
-            onPressed: () => _showCreateEventDialog(),
-            tooltip: 'Adicionar Evento',
-            child: const Icon(Icons.add_alert),
-          );
-        }
-        return null;
+        return FloatingActionButton(
+          heroTag: 'add_event',
+          onPressed: () => _showCreateEventDialog(),
+          tooltip: 'Adicionar Evento',
+          child: const Icon(Icons.add),
+        );
       case 5:
         return FloatingActionButton(
           heroTag: 'add_document',
@@ -129,7 +123,7 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
         content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             TextField(controller: titleController, autofocus: true, decoration: InputDecoration(labelText: isEditing ? 'Título do Evento' : 'Título do Evento/Aula')),
-            if (_currentUserProfile!.role == 'professor' && !isEditing) ...[
+            if (_currentUserProfile!.isPrivileged && !isEditing) ...[
               const SizedBox(height: 16),
               TextField(controller: linkController, decoration: const InputDecoration(labelText: 'Link do Google Meet (Opcional)', hintText: 'Cole para convocar uma aula')),
               const SizedBox(height: 24),
@@ -149,9 +143,16 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
                 if (isEditing) {
                   await hubService.updateEventInHub(widget.hub.id, eventToEdit!.id, titleController.text);
                 } else {
-                  final now = DateTime.now();
-                  final today = DateTime(now.year, now.month, now.day);
-                  await hubService.addEventToHub(widget.hub.id, title: titleController.text, date: today, meetLink: linkController.text.trim().isEmpty ? null : linkController.text.trim(), audience: linkController.text.trim().isEmpty ? null : selectedAudience.name);
+                  final eventDate = _selectedAgendaDay ?? DateTime.now();
+                  
+                  // --- INÍCIO DO RAIO-X DE ESCRITA ---
+                  print('--- [DEBUG AGENDA - ESCRITA] ---');
+                  print('Data selecionada (objeto DateTime): $eventDate');
+                  print('É UTC?: ${eventDate.isUtc}');
+                  print('---------------------------------');
+                  // --- FIM DO RAIO-X ---
+
+                  await hubService.addEventToHub(widget.hub.id, title: titleController.text, date: eventDate, meetLink: linkController.text.trim().isEmpty ? null : linkController.text.trim(), audience: linkController.text.trim().isEmpty ? null : selectedAudience.name);
                 }
               } catch (e) {
                 if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar evento: $e'), backgroundColor: Colors.redAccent));
@@ -245,9 +246,9 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
             hubName: widget.hub.name,
             showEventDialog: _showCreateEventDialog,
             currentUserProfile: _currentUserProfile!,
+            onDaySelectedCallback: (day) => setState(() => _selectedAgendaDay = day),
           ),
           _HubChatWrapper(hub: widget.hub),
-          // Passando o controller já criado para o widget filho.
           MindMapScreenNativo(controller: _mindMapController),
           _DocumentosTab(hubId: widget.hub.id),
           _BaralhosTab(hubId: widget.hub.id),
@@ -262,7 +263,6 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
   }
 }
 
-// O resto das classes internas permanecem as mesmas
 class _HubChatWrapper extends StatefulWidget {
   final NexoHub hub;
   const _HubChatWrapper({required this.hub});
@@ -406,28 +406,28 @@ class _BaralhosTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-      final hubService = Provider.of<NexoHubService>(context, listen: false);
-      return StreamBuilder<List<Baralho>>(
-        stream: hubService.getSharedDecksStream(hubId),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('Nenhum baralho compartilhado.'));
-          final decks = snapshot.data!;
-          return ListView.builder(
-            itemCount: decks.length,
-            itemBuilder: (context, index) {
-              final deck = decks[index];
-              return ListTile(
+     final hubService = Provider.of<NexoHubService>(context, listen: false);
+     return StreamBuilder<List<Baralho>>(
+       stream: hubService.getSharedDecksStream(hubId),
+       builder: (context, snapshot) {
+         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+         if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('Nenhum baralho compartilhado.'));
+         final decks = snapshot.data!;
+         return ListView.builder(
+           itemCount: decks.length,
+           itemBuilder: (context, index) {
+             final deck = decks[index];
+             return ListTile(
                 leading: const Icon(Icons.style),
                 title: Text(deck.nome),
                 onTap: () {
                   Navigator.of(context).push(MaterialPageRoute(builder: (context) => TelaDetalheBaralhoCompartilhado(hubId: hubId, deckId: deck.id!, deckName: deck.nome)));
                 },
-              );
-            },
-          );
-        },
-      );
+             );
+           },
+         );
+       },
+     );
   }
 }
 

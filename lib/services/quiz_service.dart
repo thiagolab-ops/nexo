@@ -1,74 +1,81 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:nexo/models/models.dart';
-import 'package:uuid/uuid.dart';
+import 'dart:math';
 
 class QuizService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final String _userId = FirebaseAuth.instance.currentUser!.uid;
 
-  CollectionReference<Quiz> _getQuizzesRef() {
-    return _firestore
-        .collection('users')
-        .doc(_userId)
-        .collection('quizzes')
+  String get _currentUserId {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception('Usuário não autenticado.');
+    return user.uid;
+  }
+  
+  CollectionReference<Quiz> _getQuizzesRef(String userId) {
+    return _firestore.collection('users').doc(userId).collection('quizzes')
         .withConverter<Quiz>(
           fromFirestore: (snapshot, _) => Quiz.fromFirestore(snapshot),
           toFirestore: (quiz, _) => quiz.toMap(),
         );
   }
-
-  Future<void> generateAndSaveQuiz({
+  
+  Future<Quiz> createQuiz({
     required String deckId,
-    required String deckName,
+    required String title,
     required List<Cartao> cards,
   }) async {
-    cards.shuffle();
+    if (cards.length < 4) {
+      throw Exception('É preciso ter pelo menos 4 cartões para gerar uma prova.');
+    }
+    
     final List<QuizQuestion> questions = [];
+    final random = Random();
+
     for (final card in cards) {
-      List<String> options = [card.verso];
       final otherCards = cards.where((c) => c.id != card.id).toList();
       otherCards.shuffle();
-      for (final otherCard in otherCards) {
-        if (options.length < 4) {
-          options.add(otherCard.verso);
-        } else {
-          break;
-        }
+      
+      final options = [card.verso];
+      for (int i = 0; i < 3 && i < otherCards.length; i++) {
+        options.add(otherCards[i].verso);
       }
-      options.shuffle();
+      options.shuffle(random);
+      
       questions.add(QuizQuestion(
-        id: const Uuid().v4(), 
+        id: card.id!,
         questionText: card.frente,
         correctAnswer: card.verso,
         options: options,
       ));
     }
 
-    final newQuizRef = _getQuizzesRef().doc();
     final newQuiz = Quiz(
-      id: newQuizRef.id,
-      title: 'Prova de "$deckName"',
-      ownerId: _userId,
+      id: '',
+      title: 'Prova Rápida: $title',
+      ownerId: _currentUserId,
       sourceDeckId: deckId,
       questions: questions,
       createdAt: Timestamp.now(),
     );
-    
-    await newQuizRef.set(newQuiz);
-  }
 
-  Stream<List<Quiz>> getQuizzesForDeckStream(String deckId) {
-    return _getQuizzesRef()
-        .where('sourceDeckId', isEqualTo: deckId)
+    final docRef = await _getQuizzesRef(_currentUserId).add(newQuiz);
+    final quizSnapshot = await docRef.get();
+    return quizSnapshot.data()!;
+  }
+  
+  // Função genérica que busca todos os quizzes de um usuário
+  Stream<List<Quiz>> getQuizzesStream(String userId) {
+    return _getQuizzesRef(userId)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
   }
 
-  // MÉTODO FALTANTE ADICIONADO
-  Stream<List<Quiz>> getAllQuizzesForUserStream() {
-    return _getQuizzesRef()
+  // NOVA FUNÇÃO EFICIENTE que busca apenas quizzes de um baralho específico
+  Stream<List<Quiz>> getQuizzesForDeckStream(String deckId) {
+    return _getQuizzesRef(_currentUserId)
+        .where('sourceDeckId', isEqualTo: deckId)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());

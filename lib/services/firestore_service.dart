@@ -3,22 +3,38 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/models.dart';
 
 class FirestoreService {
-  FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
   
-  // --- MÉTODO PARA TESTES ---
-  // Permite que nossos testes substituam o Firestore real por uma versão falsa
-  void setFirestoreForTests(FirebaseFirestore firestore) {
-    _db = firestore;
-  }
-  // --- FIM DO MÉTODO PARA TESTES ---
-
   String get _userId {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('Usuário não autenticado.');
     return user.uid;
   }
 
-  // (O resto do seu arquivo de serviço permanece exatamente o mesmo...)
+  // --- NOVA FUNÇÃO DE RESET ---
+  Future<void> resetDeckProgress(String userId, String baralhoId) async {
+    final cardsRef = _db.collection('users').doc(userId).collection('baralhos').doc(baralhoId).collection('cards');
+    final cardsSnapshot = await cardsRef.get();
+    
+    if (cardsSnapshot.docs.isEmpty) {
+      return; // Nada a fazer se não houver cartões
+    }
+
+    final WriteBatch batch = _db.batch();
+    
+    for (final doc in cardsSnapshot.docs) {
+      batch.update(doc.reference, {
+        'proximaRevisao': Timestamp.now(),
+        'intervalo': 0,
+        'repeticoes': 0,
+        'easeFactor': 2.5,
+      });
+    }
+    
+    await batch.commit();
+  }
+  // --- FIM DA NOVA FUNÇÃO ---
+
   Future<void> createDeckFromPost(Post post, List<Map<String, String>> cardsData) async {
     final batch = _db.batch();
     
