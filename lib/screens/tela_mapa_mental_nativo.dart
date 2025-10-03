@@ -6,7 +6,6 @@ import 'package:uuid/uuid.dart';
 import 'package:nexo/services/mind_map_service.dart';
 import 'package:provider/provider.dart';
 
-// A classe MindMapController permanece a mesma
 class MindMapController extends ChangeNotifier {
   List<MindMapNode> _nodes = [];
   String? _selectedNodeId;
@@ -57,6 +56,23 @@ class MindMapController extends ChangeNotifier {
   void _save() {
     service.saveMindMap(hubId, _nodes);
   }
+
+  // --- NOVA FUNÇÃO DE RESET ---
+  void resetMap() {
+    if (_nodes.isEmpty) return;
+
+    // Encontra o nó raiz (aquele sem pai)
+    final rootNode = _nodes.firstWhere((node) => node.parentId == null, orElse: () => _nodes.first);
+    
+    // Define a lista de nós para conter apenas o nó raiz
+    _nodes = [rootNode];
+    _selectedNodeId = rootNode.id; // Seleciona o nó raiz
+
+    // Salva o estado resetado no Firestore
+    _save();
+    notifyListeners();
+  }
+  // --- FIM DA NOVA FUNÇÃO ---
 
   void addNode() {
     if (_selectedNodeId == null) return;
@@ -188,7 +204,7 @@ class MindMapController extends ChangeNotifier {
 
   void centerView(Size screenSize) {
     if (_nodes.isEmpty) return;
-    final rootNode = _nodes.firstWhere((n) => n.parentId == null);
+    final rootNode = _nodes.firstWhere((n) => n.parentId == null, orElse: () => _nodes.first);
     _transform = Matrix4.identity()
       ..translate(
         screenSize.width / 2 - rootNode.position.dx,
@@ -198,10 +214,10 @@ class MindMapController extends ChangeNotifier {
   }
   
   void zoom(double factor, Offset center) {
-     _transform.translate(center.dx, center.dy);
-     _transform.scale(factor, factor);
-     _transform.translate(-center.dx, -center.dy);
-     notifyListeners();
+      _transform.translate(center.dx, center.dy);
+      _transform.scale(factor, factor);
+      _transform.translate(-center.dx, -center.dy);
+      notifyListeners();
   }
   
   MindMapNode? _getNodeById(String id) {
@@ -249,7 +265,6 @@ class MindMapController extends ChangeNotifier {
 }
 
 class MindMapScreenNativo extends StatefulWidget {
-  // O widget agora recebe o controller, em vez de criá-lo.
   final MindMapController controller;
   const MindMapScreenNativo({super.key, required this.controller});
 
@@ -258,15 +273,24 @@ class MindMapScreenNativo extends StatefulWidget {
 }
 
 class _MindMapScreenNativoState extends State<MindMapScreenNativo> {
-  // Remove a criação do controller daqui e usa o que vem do widget.
   late final MindMapController controller;
   Offset? _lastDragPosition;
 
   @override
   void initState() {
     super.initState();
-    controller = widget.controller; // Usa o controller passado como parâmetro
+    controller = widget.controller;
     
+    // --- NOVA LÓGICA DE CENTRALIZAÇÃO AUTOMÁTICA ---
+    // Adiciona um callback para ser executado APÓS o primeiro frame ser desenhado.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final screenSize = MediaQuery.of(context).size;
+        controller.centerView(screenSize);
+      }
+    });
+    // --- FIM DA NOVA LÓGICA ---
+
     controller.textFocusNode.addListener(() {
       if (!controller.textFocusNode.hasFocus) {
         controller.finishEditing();
@@ -283,7 +307,6 @@ class _MindMapScreenNativoState extends State<MindMapScreenNativo> {
       body: AnimatedBuilder(
         animation: controller,
         builder: (context, child) {
-          // O resto da UI permanece o mesmo...
           return Stack(
             children: [
               GestureDetector(
@@ -348,6 +371,7 @@ class _MindMapScreenNativoState extends State<MindMapScreenNativo> {
     );
   }
 
+  // --- BARRA DE FERRAMENTAS ATUALIZADA COM O BOTÃO DE RESET ---
   Widget _buildToolbar(Size screenSize) {
     bool isNodeSelected = controller.selectedNodeId != null;
     bool isRootSelected = isNodeSelected && controller.nodes.isNotEmpty && controller.nodes.first.id == controller.selectedNodeId;
@@ -395,6 +419,28 @@ class _MindMapScreenNativoState extends State<MindMapScreenNativo> {
                   icon: const Icon(Icons.center_focus_strong),
                   tooltip: 'Centralizar',
                   onPressed: () => controller.centerView(screenSize),
+                ),
+                // NOVO BOTÃO DE RESET
+                IconButton(
+                  icon: const Icon(Icons.replay_circle_filled_outlined, color: Colors.orangeAccent),
+                  tooltip: 'Resetar Mapa',
+                  onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Resetar Mapa Mental?'),
+                        content: const Text('Esta ação apagará todos os nós, exceto o nó central. Esta ação não pode ser desfeita.'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancelar')),
+                          TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Resetar', style: TextStyle(color: Colors.red))),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      controller.resetMap();
+                      controller.centerView(screenSize);
+                    }
+                  },
                 ),
               ],
             ),

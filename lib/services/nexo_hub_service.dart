@@ -2,11 +2,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:nexo/models/models.dart';
 import 'package:nexo/services/profile_service.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class NexoHubService {
   final FirebaseFirestore _firestore;
-  // --- CORREÇÃO: ProfileService agora é uma dependência injetada ---
   final ProfileService _profileService;
+  final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(region: 'us-central1');
 
   NexoHubService({
     FirebaseFirestore? firestore,
@@ -35,7 +36,6 @@ class NexoHubService {
           );
           
   Future<void> createHub({required String name, String? description}) async {
-    // --- CORREÇÃO: Usa a instância _profileService ---
     final userProfile = await _profileService.getUserProfile(_currentUserId);
     if (userProfile == null) return;
 
@@ -70,7 +70,6 @@ class NexoHubService {
     await batch.commit();
   }
   
-  // --- NOVA FUNÇÃO DE CONVITE (sem alterações, já estava boa) ---
   Future<void> sendHubInvite({
     required String hubId,
     required String hubName,
@@ -98,7 +97,6 @@ class NexoHubService {
   Future<List<UserModel>> getHubMembers(String hubId) async {
     final hub = await getHubById(hubId);
     if (hub == null || hub.memberIds.isEmpty) return [];
-    // --- CORREÇÃO: Usa a instância _profileService ---
     return await _profileService.getUsersFromIdList(hub.memberIds);
   }
 
@@ -116,7 +114,6 @@ class NexoHubService {
   }
 
   Future<void> addEventToHub(String hubId, { required String title, required DateTime date, String? meetLink, String? audience, }) async {
-    // --- CORREÇÃO: Usa a instância _profileService ---
     final userProfile = await _profileService.getUserProfile(_currentUserId);
     if (userProfile == null) return;
     
@@ -151,16 +148,11 @@ class NexoHubService {
     }
   }
   
-  Future<void> deleteHub(String hubId, String ownerId) async {
-    if (_currentUserId != ownerId) {
-      throw Exception('Apenas o dono pode deletar um hub.');
-    }
-    final batch = _firestore.batch();
-    final hubRef = _hubsRef.doc(hubId);
-    final chatRef = _chatRoomsRef.doc(hubId);
-    batch.delete(hubRef);
-    batch.delete(chatRef);
-    await batch.commit();
+  // --- LÓGICA DE EXCLUSÃO ATUALIZADA ---
+  // Agora aceita apenas um argumento e chama a Cloud Function.
+  Future<void> deleteHub(String hubId) async {
+    final callable = _functions.httpsCallable('deleteHub');
+    await callable.call({'hubId': hubId});
   }
 
   Stream<List<NexoHub>> getHubsForCurrentUser() {

@@ -15,17 +15,13 @@ class TelaHubsLista extends StatefulWidget {
 }
 
 class _TelaHubsListaState extends State<TelaHubsLista> {
-  // --- CORREÇÃO: Variáveis de serviço removidas do estado ---
   late final String _currentUserId;
 
   @override
   void initState() {
     super.initState();
-    // --- CORREÇÃO: Acessar 'context' em initState é perigoso. Obtemos apenas o UID aqui. ---
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      // Se por algum motivo o usuário não estiver logado, tratamos isso.
-      // Você pode querer navegar para a tela de login aqui.
       _currentUserId = ''; 
     } else {
       _currentUserId = user.uid;
@@ -33,13 +29,12 @@ class _TelaHubsListaState extends State<TelaHubsLista> {
   }
   
   void _showInviteDialog(NexoHub hub) {
-    // --- CORREÇÃO: Serviços e profile obtidos via context DENTRO do método ---
     final hubService = context.read<NexoHubService>();
     final profileService = context.read<ProfileService>();
     final currentUserProfile = context.read<UserModel?>();
 
     if (currentUserProfile == null) {
-       ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Não foi possível obter seu perfil para enviar o convite.'), backgroundColor: Colors.red),
       );
       return;
@@ -154,8 +149,7 @@ class _TelaHubsListaState extends State<TelaHubsLista> {
 
     if (confirm == true) {
       try {
-        // --- CORREÇÃO: Acessa o serviço via context aqui ---
-        await context.read<NexoHubService>().deleteHub(hub.id, hub.ownerId);
+        await context.read<NexoHubService>().deleteHub(hub.id);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Hub "${hub.name}" excluído.'), backgroundColor: Colors.green),
@@ -179,7 +173,6 @@ class _TelaHubsListaState extends State<TelaHubsLista> {
     
     return Scaffold(
       body: StreamBuilder<List<NexoHub>>(
-        // --- CORREÇÃO: Acessa o serviço via context aqui ---
         stream: context.watch<NexoHubService>().getHubsForCurrentUser(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
