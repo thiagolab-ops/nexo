@@ -1,11 +1,14 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:nexo/nexo_theme.dart'; 
-import 'package:nexo/screens/tela_baralhos_lista.dart'; 
-import 'package:nexo/screens/tela_daxu_chan.dart'; 
+import 'package:nexo/nexo_theme.dart';
+import 'package:nexo/screens/tela_baralhos_lista.dart';
+import 'package:nexo/screens/tela_daxu_chan.dart';
 import 'package:nexo/screens/tela_notificacoes.dart';
 import 'package:nexo/screens/tela_perfil.dart';
 import 'package:nexo/services/chat_service.dart';
@@ -16,11 +19,12 @@ import 'package:nexo/services/nexo_hub_service.dart';
 import 'package:nexo/services/notification_service.dart';
 import 'package:nexo/services/quiz_service.dart';
 import 'package:nexo/services/report_service.dart';
-import 'package:nexo/services/theme_provider.dart'; 
+import 'package:nexo/services/theme_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:nexo/screens/tela_feed.dart';
 import 'package:webview_flutter_web/webview_flutter_web.dart';
 import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
+import 'dart:io' show Platform;
 
 import 'auth_gate.dart';
 import 'firebase_options.dart';
@@ -30,20 +34,55 @@ import 'services/nexo_pad_service.dart';
 import 'screens/tela_criar_post.dart';
 import 'screens/tela_hubs_lista.dart';
 import 'screens/tela_nexo_pad_lista.dart';
-import 'screens/tela_play_lista.dart'; 
-import 'screens/tela_social_nova.dart'; 
+import 'screens/tela_play_lista.dart';
+import 'screens/tela_social_nova.dart';
 import 'screens/tela_nexo_pad.dart';
 import 'widgets/user_avatar.dart';
+
+// Constante para ligar/desligar o uso dos emuladores
+const bool USE_EMULATOR = true;
+
+Future<void> _connectToEmulators() async {
+  final String host = kIsWeb ? 'localhost' : Platform.isAndroid ? '10.0.2.2' : 'localhost';
+
+  try {
+    print('--- USANDO EMULADORES LOCAIS ---');
+    
+    // Conecta ao emulador do Firestore
+    FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
+    print('[OK] Firestore Emulator -> $host:8080');
+
+    // Conecta ao emulador do Functions
+    FirebaseFunctions.instanceFor(region: 'us-central1').useFunctionsEmulator(host, 5001);
+    print('[OK] Functions Emulator -> $host:5001');
+
+    // Conecta ao emulador do Authentication
+    await FirebaseAuth.instance.useAuthEmulator(host, 9099);
+    print('[OK] Auth Emulator -> $host:9099');
+    
+    print('--- CONEXÃO COM EMULADORES ESTABELECIDA ---');
+  } catch (e) {
+    print('!!! ERRO AO CONECTAR AOS EMULADORES: $e');
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  WebViewPlatform.instance = WebWebViewPlatform();
+  // Configura a WebView para a plataforma web
+  if (kIsWeb) {
+    WebViewPlatform.instance = WebWebViewPlatform();
+  }
   
   await EasyLocalization.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  
+  // Se estiver em modo debug e a constante USE_EMULATOR for true, conecta aos emuladores
+  if (kDebugMode && USE_EMULATOR) {
+    await _connectToEmulators();
+  }
   
   await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
 
@@ -64,38 +103,36 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamProvider<User?>(
-      create: (_) => FirebaseAuth.instance.authStateChanges(),
-      initialData: null,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        Provider<ProfileService>(create: (_) => ProfileService()),
+        Provider<NotificationService>(create: (_) => NotificationService()),
+        Provider<NexoPadService>(create: (_) => NexoPadService()),
+        Provider<FirestoreService>(create: (_) => FirestoreService()),
+        Provider<NexoHubService>(create: (_) => NexoHubService()),
+        Provider<ChatService>(create: (_) => ChatService()),
+        Provider<FeedService>(create: (_) => FeedService()),
+        Provider<QuizService>(create: (_) => QuizService()),
+        Provider<ReportService>(create: (_) => ReportService()),
+        Provider<MindMapService>(create: (_) => MindMapService()),
+        StreamProvider<User?>(
+          create: (_) => FirebaseAuth.instance.authStateChanges(),
+          initialData: null,
+        ),
+      ],
       child: Consumer<User?>(
         builder: (context, user, _) {
-          return MultiProvider(
-            providers: [
-              ChangeNotifierProvider(create: (_) => ThemeProvider()),
-              Provider<ProfileService>(create: (_) => ProfileService()),
-              Provider<NotificationService>(create: (_) => NotificationService()),
-              Provider<NexoPadService>(create: (_) => NexoPadService()),
-              Provider<FirestoreService>(create: (_) => FirestoreService()),
-              Provider<NexoHubService>(create: (_) => NexoHubService()),
-              Provider<ChatService>(create: (_) => ChatService()),
-              Provider<FeedService>(create: (_) => FeedService()),
-              Provider<QuizService>(create: (_) => QuizService()),
-              Provider<ReportService>(create: (_) => ReportService()),
-              Provider<MindMapService>(create: (_) => MindMapService()),
-              
-              if (user != null)
-                StreamProvider<UserModel?>.value(
-                  value: ProfileService().getUserProfileStream(user.uid),
-                  initialData: null,
-                )
-            ],
+          return StreamProvider<UserModel?>.value(
+            value: user != null ? ProfileService().getUserProfileStream(user.uid) : Stream.value(null),
+            initialData: null,
             child: Consumer<ThemeProvider>(
               builder: (context, themeProvider, child) {
                 return MaterialApp(
                   localizationsDelegates: context.localizationDelegates,
                   supportedLocales: context.supportedLocales,
                   locale: context.locale,
-                  title: 'DAXU', 
+                  title: 'DAXU',
                   theme: NexoTheme.light,
                   darkTheme: NexoTheme.dark,
                   themeMode: themeProvider.themeMode,
@@ -126,28 +163,29 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
   @override
   void initState() {
     super.initState();
-    _checkCustomClaims(); // <<-- NOSSO CÓDIGO DE DEBUG AQUI
+    _checkCustomClaims();
 
     _telas = [
-      TelaBaralhosLista(showNewDeckDialog: _mostrarDialogoNovoBaralho), 
+      TelaBaralhosLista(showNewDeckDialog: _mostrarDialogoNovoBaralho),
       const TelaHubsLista(),
       const TelaNexoPadLista(),
-      const TelaDaxuChan(), 
+      const TelaDaxuChan(),
       const TelaFeed(),
       const TelaPlayLista(),
-      const TelaSocialNova(), 
+      const TelaSocialNova(),
     ];
   }
   
-  // <<-- FUNÇÃO DE DEBUG ADICIONADA
   void _checkCustomClaims() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      // O 'true' força a atualização do token
+      // Forçar a atualização do token para pegar os claims mais recentes
       final idTokenResult = await user.getIdTokenResult(true); 
-      print('--- [CUSTOM CLAIMS DEBUG] ---');
-      print('Claims do Token: ${idTokenResult.claims}');
-      print('-----------------------------');
+      if(kDebugMode) {
+        print('--- [CUSTOM CLAIMS DEBUG] ---');
+        print('Claims do Token: ${idTokenResult.claims}');
+        print('-----------------------------');
+      }
     }
   }
 
@@ -175,9 +213,10 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                   final firestoreService = context.read<FirestoreService>();
                   final userId = FirebaseAuth.instance.currentUser!.uid;
                   if (baralhoExistente != null) {
+                    // AQUI ESTÁ A CORREÇÃO DE NULIDADE
                     await firestoreService.updateBaralho(userId, baralhoExistente.id!, nome);
                   } else {
-                    final novoBaralho = Baralho(nome: nome, ownerId: userId);
+                    final novoBaralho = Baralho(id: '', nome: nome, ownerId: userId);
                     await firestoreService.addBaralho(novoBaralho, userId);
                   }
                   if (mounted) Navigator.of(dialogContext).pop();
@@ -252,7 +291,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
 
   Widget? _buildFloatingActionButton(BuildContext context, UserModel userProfile) {
     switch (_indiceAtual) {
-      case 0: 
+      case 0:
         return FloatingActionButton(
           heroTag: 'add_deck',
           onPressed: () => _mostrarDialogoNovoBaralho(),
@@ -260,7 +299,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
           child: const Icon(Icons.add),
         );
         
-      case 1: 
+      case 1:
         return FloatingActionButton(
           heroTag: 'add_hub',
           onPressed: _showCreateHubDialog,
@@ -268,7 +307,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
           child: const Icon(Icons.add),
         );
 
-      case 2: 
+      case 2:
         return FloatingActionButton(
           heroTag: 'add_document',
           onPressed: () async {
@@ -283,7 +322,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
           tooltip: 'Novo Documento',
           child: const Icon(Icons.add),
         );
-      case 4: 
+      case 4:
         if (userProfile.isPrivileged) {
           return FloatingActionButton(
             heroTag: 'add_post',
@@ -297,8 +336,8 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
             child: const Icon(Icons.add),
           );
         }
-        return null; 
-      default: 
+        return null;
+      default:
         return null;
     }
   }
@@ -350,7 +389,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                ));
             },
             icon: UserAvatar(
-              key: ValueKey(userProfile.photoUrl), 
+              key: ValueKey(userProfile.photoUrl),
               username: userProfile.username,
               photoUrl: userProfile.photoUrl,
               radius: 20,
@@ -367,7 +406,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
         index: _indiceAtual,
         children: _telas,
       ),
-      floatingActionButton: _buildFloatingActionButton(context, userProfile), 
+      floatingActionButton: _buildFloatingActionButton(context, userProfile),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _indiceAtual,
         onTap: (indice) => setState(() => _indiceAtual = indice),

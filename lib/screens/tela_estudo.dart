@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import '../models/models.dart';
-import '../services/firestore_service.dart';
-import '../services/profile_service.dart';
-import '../services/srs_service.dart';
+import 'package:nexo/models/models.dart';
+import 'package:nexo/services/firestore_service.dart';
+import 'package:nexo/services/profile_service.dart';
+import 'package:nexo/services/srs_service.dart';
+import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class TelaEstudo extends StatefulWidget {
   final Baralho baralho;
@@ -16,38 +19,31 @@ class TelaEstudo extends StatefulWidget {
 }
 
 class _TelaEstudoState extends State<TelaEstudo> {
-  final ProfileService _profileService = ProfileService();
-  final FirestoreService _firestoreService = FirestoreService();
-  late Future<List<Cartao>> _cardsParaEstudarFuture;
-  
+  late final ProfileService _profileService;
+  late final FirestoreService _firestoreService;
+
   List<Cartao> _filaDeEstudo = [];
-  List<Cartao> _filaDeLapsos = [];
-
   Map<int, String> _proximosIntervalos = {};
-
-  int _cardAtualIndex = 0;
+  bool _isLoading = true;
   bool _mostrandoVerso = false;
-  bool _emRevisaoDeLapsos = false;
   bool _streakAlreadyUpdated = false;
 
   @override
   void initState() {
     super.initState();
+    _profileService = context.read<ProfileService>();
+    _firestoreService = context.read<FirestoreService>();
     _carregarCards();
   }
 
-  void _carregarCards() {
-    _cardsParaEstudarFuture = _firestoreService
-        .getCards(widget.userId, widget.baralho.id!)
-        .first
-        .then((todosOsCards) {
-      final agora = DateTime.now();
-      _filaDeEstudo = todosOsCards
-          .where((card) =>
-              card.proximaRevisao.isBefore(agora) || card.repeticoes == 0)
-          .toList();
+  Future<void> _carregarCards() async {
+    final todosOsCards = await _firestoreService.getCards(widget.userId, widget.baralho.id!).first;
+    final agora = DateTime.now();
+    
+    setState(() {
+      _filaDeEstudo = todosOsCards.where((card) => card.proximaRevisao.isBefore(agora)).toList();
       _filaDeEstudo.shuffle();
-      return _filaDeEstudo;
+      _isLoading = false;
     });
   }
 
@@ -59,60 +55,59 @@ class _TelaEstudoState extends State<TelaEstudo> {
       setState(() { _streakAlreadyUpdated = true; });
     }
     await _profileService.addXp(widget.userId, 5);
-    
-    Cartao cardAtual = _filaDeEstudo[_cardAtualIndex];
-    Cartao cardAtualizado = SrsService.calcular(cardAtual, qualidade);
 
-    try {
-      await _firestoreService.updateCard(
-          widget.userId, widget.baralho.id!, cardAtualizado);
+    Cartao cardAtual = _filaDeEstudo.first;
+
+    if (qualidade < 3) {
+      cardAtual.repeticoes = 0; // Reseta o progresso do card
       
-      if (qualidade < 3) {
-        _filaDeLapsos.add(cardAtual);
-      }
-      _avancarCard();
-    } catch (e) {
-      if(mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erro ao salvar o progresso: ${e.toString()}"), backgroundColor: Colors.red),
-        );
+      final cartaoErrado = _filaDeEstudo.removeAt(0);
+      _filaDeEstudo.add(cartaoErrado);
+
+      setState(() {
+        _mostrandoVerso = false;
+        _proximosIntervalos.clear();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Este cartão voltará em alguns minutos..."), backgroundColor: Colors.orangeAccent, duration: Duration(seconds: 2)),
+      );
+    } else {
+      Cartao cardAtualizado = SrsService.calcular(cardAtual, qualidade);
+
+      try {
+        await _firestoreService.updateCard(widget.userId, widget.baralho.id!, cardAtualizado);
+        
+        setState(() {
+          _filaDeEstudo.removeAt(0);
+          _mostrandoVerso = false;
+          _proximosIntervalos.clear();
+        });
+
+      } catch (e) {
+        if(mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Erro ao salvar o progresso: ${e.toString()}"), backgroundColor: Colors.red),
+          );
+        }
       }
     }
   }
 
-  void _avancarCard() {
-    setState(() {
-      _mostrandoVerso = false;
-      _proximosIntervalos.clear();
-
-      if (_cardAtualIndex < _filaDeEstudo.length - 1) {
-        _cardAtualIndex++;
-      } else {
-        if (_filaDeLapsos.isNotEmpty) {
-          _emRevisaoDeLapsos = true;
-          _filaDeEstudo = List.from(_filaDeLapsos);
-          _filaDeLapsos.clear();
-          _cardAtualIndex = 0;
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Revisando os cartões que você errou..."), backgroundColor: Colors.orangeAccent),
-          );
-        } else {
-          _filaDeEstudo = []; 
-        }
-      }
-    });
-  }
-
   void _calcularProximosIntervalos() {
     if (_filaDeEstudo.isEmpty) return;
-    final card = _filaDeEstudo[_cardAtualIndex];
+    final card = _filaDeEstudo.first;
     
     final resultados = <int, String>{};
     for (var qualidade in [0, 3, 4, 5]) {
-      final cartaoSimulado = Cartao.fromMap(card.toMap()); 
-      final cartaoCalculado = SrsService.calcular(cartaoSimulado, qualidade);
-      resultados[qualidade] = _formatarIntervalo(cartaoCalculado.intervalo);
+      final cartaoSimulado = Cartao.fromMap(card.toMap());
+      
+      if (qualidade < 3) {
+        resultados[qualidade] = "< 10m";
+      } else {
+        final cartaoCalculado = SrsService.calcular(cartaoSimulado, qualidade);
+        resultados[qualidade] = _formatarIntervalo(cartaoCalculado.intervalo);
+      }
     }
 
     setState(() {
@@ -121,9 +116,9 @@ class _TelaEstudoState extends State<TelaEstudo> {
   }
 
   String _formatarIntervalo(int dias) {
-    if (_emRevisaoDeLapsos || dias <= 1) return "< 10m"; // Se errou, revisa em breve
+    if (dias <= 1) return "1d";
     if (dias < 30) return "${dias}d";
-    if (dias < 365) return "${(dias / 30).toStringAsFixed(1)}m";
+    if (dias < 365) return "${(dias / 30).round()}m";
     return "${(dias / 365).toStringAsFixed(1)}a";
   }
 
@@ -131,64 +126,60 @@ class _TelaEstudoState extends State<TelaEstudo> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('studyingTitle'.tr(args: [widget.baralho.nome])),
+        title: Text('Estudando: ${widget.baralho.nome}'), //TODO: Adicionar .tr()
       ),
-      body: FutureBuilder<List<Cartao>>(
-        future: _cardsParaEstudarFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text("Erro ao carregar cartões: ${snapshot.error}"));
-          }
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _filaDeEstudo.isEmpty
+              ? _buildTelaConclusao()
+              : _buildInterfaceEstudo(),
+    );
+  }
 
-          if (_filaDeEstudo.isEmpty) {
-            return _buildTelaConclusao();
-          }
-
-          final cardAtual = _filaDeEstudo[_cardAtualIndex];
-
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Text(
-                  _emRevisaoDeLapsos 
-                      ? "Revisão: ${ _cardAtualIndex + 1 } de ${ _filaDeEstudo.length }"
-                      : "Restantes: ${ (_filaDeEstudo.length - _cardAtualIndex) + _filaDeLapsos.length }",
-                  style: const TextStyle(color: Colors.white70),
-                ),
-              ),
-              Expanded(
-                flex: 3,
-                child: Card(
-                  margin: const EdgeInsets.all(16),
-                  color: Colors.blueGrey[800],
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: SingleChildScrollView(
-                        child: Text(
-                          _mostrandoVerso ? cardAtual.verso : cardAtual.frente,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 28, color: Colors.white),
-                        ),
-                      ),
+  Widget _buildInterfaceEstudo() {
+    final cardAtual = _filaDeEstudo.first;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Text(
+            "Restantes nesta sessão: ${_filaDeEstudo.length}",
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+        Expanded(
+          flex: 3,
+          child: GestureDetector(
+            onTap: () {
+              if (!_mostrandoVerso) {
+                _calcularProximosIntervalos();
+                setState(() => _mostrandoVerso = true);
+              }
+            },
+            child: Card(
+              margin: const EdgeInsets.all(16),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: SingleChildScrollView(
+                    child: Text(
+                      _mostrandoVerso ? cardAtual.verso : cardAtual.frente,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 28),
                     ),
                   ),
                 ),
               ),
-              Expanded(
-                flex: 2,
-                child: _mostrandoVerso
-                    ? _buildBotoesDeQualidade()
-                    : _buildBotaoMostrarResposta(),
-              ),
-            ],
-          );
-        },
-      ),
+            ),
+          ),
+        ),
+        Expanded(
+          flex: 2,
+          child: _mostrandoVerso
+              ? _buildBotoesDeQualidade()
+              : _buildBotaoMostrarResposta(),
+        ),
+      ],
     );
   }
 
@@ -199,10 +190,10 @@ class _TelaEstudoState extends State<TelaEstudo> {
           padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
         ),
         onPressed: () {
-          _calcularProximosIntervalos(); 
+          _calcularProximosIntervalos();
           setState(() => _mostrandoVerso = true);
         },
-        child: const Text("Mostrar Resposta", style: TextStyle(fontSize: 18)),
+        child: const Text("Mostrar Resposta", style: TextStyle(fontSize: 18)), //TODO: Adicionar .tr()
       ),
     );
   }
@@ -211,7 +202,7 @@ class _TelaEstudoState extends State<TelaEstudo> {
     Widget buildButton(String label, int qualidade, Color color) {
       final intervalo = _proximosIntervalos[qualidade] ?? "";
       return ElevatedButton(
-        style: ElevatedButton.styleFrom(backgroundColor: color, padding: const EdgeInsets.all(12)),
+        style: ElevatedButton.styleFrom(backgroundColor: color, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16)),
         onPressed: () => _processarResposta(qualidade),
         child: Text("$label\n$intervalo", textAlign: TextAlign.center),
       );
@@ -225,10 +216,11 @@ class _TelaEstudoState extends State<TelaEstudo> {
           spacing: 12,
           runSpacing: 12,
           children: [
-            buildButton("Errei", 0, Colors.redAccent),
-            buildButton("Difícil", 3, Colors.orangeAccent),
-            buildButton("Bom", 4, Colors.green),
-            buildButton("Fácil", 5, Colors.blue),
+            // Textos corrigidos diretamente no código
+            buildButton("Errei", 0, Colors.red[800]!),
+            buildButton("Difícil", 3, Colors.orange[800]!),
+            buildButton("Bom", 4, Colors.blue[800]!),
+            buildButton("Fácil", 5, Colors.green[800]!),
           ],
         ),
       ],
@@ -242,16 +234,16 @@ class _TelaEstudoState extends State<TelaEstudo> {
         children: [
           const Icon(Icons.check_circle, color: Colors.green, size: 80),
           const SizedBox(height: 16),
-          const Text(
+          const Text( //TODO: Adicionar .tr()
             "Sessão Concluída!",
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          const Text("Você revisou todos os cartões por hoje."),
+          const Text("Você revisou todos os cartões por hoje."), //TODO: Adicionar .tr()
           const SizedBox(height: 20),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text("Voltar para o baralho"),
+            child: const Text("Voltar para o baralho"), //TODO: Adicionar .tr()
           )
         ],
       ),

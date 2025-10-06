@@ -241,6 +241,8 @@ class HubEvent {
   }
 }
 
+enum SubscriptionStatus { free, adFree, professor }
+
 class UserModel {
   final String id;
   final String username;
@@ -259,6 +261,9 @@ class UserModel {
   final String role;
   final bool hasCompletedOnboarding;
   final int unreadNotificationCount;
+  final String? stripeCustomerId;
+  final SubscriptionStatus subscriptionStatus;
+  final Timestamp? subscriptionEndDate;
 
   bool get isPrivileged => role == 'professor' || role == 'super_admin';
 
@@ -280,6 +285,9 @@ class UserModel {
     this.role = 'student',
     this.hasCompletedOnboarding = false,
     this.unreadNotificationCount = 0,
+    this.stripeCustomerId,
+    this.subscriptionStatus = SubscriptionStatus.free,
+    this.subscriptionEndDate,
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) {
@@ -302,6 +310,9 @@ class UserModel {
       role: data['role'] ?? 'student',
       hasCompletedOnboarding: data['hasCompletedOnboarding'] ?? false,
       unreadNotificationCount: data['unreadNotificationCount'] ?? 0,
+      stripeCustomerId: data['stripeCustomerId'],
+      subscriptionStatus: SubscriptionStatus.values.byName(data['subscriptionStatus'] ?? 'free'),
+      subscriptionEndDate: data['subscriptionEndDate'],
     );
   }
 
@@ -317,17 +328,20 @@ class UserModel {
       'role': role,
       'hasCompletedOnboarding': hasCompletedOnboarding,
       'unreadNotificationCount': unreadNotificationCount,
+      'stripeCustomerId': stripeCustomerId,
+      'subscriptionStatus': subscriptionStatus.name,
+      'subscriptionEndDate': subscriptionEndDate,
     };
   }
 }
 
 class Baralho { 
-  String? id; 
+  final String id; // Alterado para ser non-nullable, sempre vem do snapshot.id
   String nome; 
   String? descricao; 
   String? ownerId;
   
-  Baralho({ this.id, required this.nome, this.descricao, this.ownerId }); 
+  Baralho({ required this.id, required this.nome, this.descricao, this.ownerId }); 
 
   Map<String, dynamic> toMap() {
     return {
@@ -336,6 +350,16 @@ class Baralho {
       'ownerId': ownerId,
       'criadoEm': FieldValue.serverTimestamp(),
     };
+  }
+
+  factory Baralho.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data()!;
+    return Baralho(
+      id: doc.id, // snapshot.id é sempre String e não-nulo
+      nome: data['nome'] ?? '',
+      descricao: data['descricao'],
+      ownerId: data['ownerId'],
+    );
   }
 }
 
@@ -348,7 +372,16 @@ class Cartao {
   int intervalo; 
   double easeFactor; 
   int repeticoes; 
-  Cartao({ this.id, required this.baralhoId, required this.frente, required this.verso, DateTime? proximaRevisao, this.intervalo = 0, this.easeFactor = 2.5, this.repeticoes = 0, }) : proximaRevisao = proximaRevisao ?? DateTime.now(); 
+  Cartao({ 
+    this.id, 
+    required this.baralhoId, 
+    required this.frente, 
+    required this.verso, 
+    DateTime? proximaRevisao, 
+    this.intervalo = 0, 
+    this.easeFactor = 2.5, 
+    this.repeticoes = 0, 
+  }) : proximaRevisao = proximaRevisao ?? DateTime.now(); 
   
   Map<String, dynamic> toMap() { 
     return { 
@@ -365,14 +398,14 @@ class Cartao {
   factory Cartao.fromMap(Map<String, dynamic> map) { 
     final data = map; 
     return Cartao( 
-      id: data['id'], 
-      baralhoId: data['baralho_id'], 
-      frente: data['frente'], 
-      verso: data['verso'], 
-      proximaRevisao: (data['proximaRevisao'] as Timestamp).toDate(), 
-      intervalo: data['intervalo'], 
-      easeFactor: (data['easeFactor'] as num?)?.toDouble() ?? 2.5, 
-      repeticoes: data['repeticoes'], 
+      id: data['id'] as String?, // id pode ser nulo se não for atribuído pelo Firestore ainda
+      baralhoId: data['baralho_id'] ?? '', // Garante que baralhoId não seja nulo
+      frente: data['frente'] ?? '',
+      verso: data['verso'] ?? '',
+      proximaRevisao: (data['proximaRevisao'] as Timestamp?)?.toDate() ?? Timestamp.now().toDate(),
+      intervalo: data['intervalo'] as int? ?? 0, // Adiciona default 0 para segurança
+      easeFactor: (data['easeFactor'] as num?)?.toDouble() ?? 2.5,
+      repeticoes: data['repeticoes'] as int? ?? 0, // Adiciona default 0 para segurança
     ); 
   } 
 }
@@ -434,7 +467,7 @@ class NexoPadDocument {
   
   factory NexoPadDocument.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) { 
     final data = snapshot.data()!; 
-    return NexoPadDocument( 
+    return NexoPadDocument(
       id: snapshot.id, 
       title: data['title'] ?? 'Sem Título', 
       ownerId: data['ownerId'] ?? '', 
@@ -673,7 +706,7 @@ class VideoNexo { // (Arquivo)
     } catch (e) {
       print('Erro ao extrair thumbnail: $e');
     }
-    return ''; 
+    return '';
   }
 
   Map<String, dynamic> toMap() {
@@ -777,7 +810,7 @@ class Lesson {
   
   String get thumbnailUrl {
     try {
-       if (videoUrl.contains('youtube.com') || videoUrl.contains('youtu.be')) {
+      if (videoUrl.contains('youtube.com') || videoUrl.contains('youtu.be')) {
         String? videoId;
         if (videoUrl.contains('youtu.be/')) {
           videoId = videoUrl.split('youtu.be/').last.split('?').first.split('&').first;

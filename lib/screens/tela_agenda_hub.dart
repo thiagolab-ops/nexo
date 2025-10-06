@@ -12,7 +12,7 @@ class TelaAgendaHub extends StatefulWidget {
   final String hubName;
   final Function({HubEvent? eventToEdit}) showEventDialog;
   final UserModel currentUserProfile;
-  final void Function(DateTime) onDaySelectedCallback;
+  final void Function(DateTime) onDaySelectedCallback; // This parameter is added
 
   const TelaAgendaHub({
     super.key,
@@ -20,7 +20,7 @@ class TelaAgendaHub extends StatefulWidget {
     required this.hubName,
     required this.showEventDialog,
     required this.currentUserProfile,
-    required this.onDaySelectedCallback,
+    required this.onDaySelectedCallback, // This parameter is added
   });
 
   @override
@@ -51,17 +51,17 @@ class _TelaAgendaHubState extends State<TelaAgendaHub> {
   }
 
   List<HubEvent> _getEventsForDay(DateTime day) {
-    // CORREÇÃO: Usa DateTime.utc ao MEIO-DIA para a chave de busca
-    final dayUtc = DateTime.utc(day.year, day.month, day.day, 12);
+    // CORREÇÃO: Usa DateTime.utc para consistência
+    final dayUtc = DateTime.utc(day.year, day.month, day.day);
     return _eventsMap[dayUtc] ?? [];
   }
 
   void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
     if (!isSameDay(_selectedDay, selectedDay)) {
       setState(() {
-        // CORREÇÃO: Garante que a data selecionada seja sempre ao MEIO-DIA UTC
-        _selectedDay = DateTime.utc(selectedDay.year, selectedDay.month, selectedDay.day, 12);
-        _focusedDay = DateTime.utc(focusedDay.year, focusedDay.month, focusedDay.day, 12);
+        // CORREÇÃO: Garante que a data selecionada e focada estejam em UTC
+        _selectedDay = DateTime.utc(selectedDay.year, selectedDay.month, selectedDay.day);
+        _focusedDay = DateTime.utc(focusedDay.year, focusedDay.month, focusedDay.day);
         widget.onDaySelectedCallback(_selectedDay!);
       });
     }
@@ -133,9 +133,9 @@ class _TelaAgendaHubState extends State<TelaAgendaHub> {
         final allEvents = snapshot.data ?? [];
         _eventsMap = {};
         for (final event in allEvents) {
+          // CORREÇÃO: Garante que a data vinda do Firestore seja tratada como UTC
           final localDate = event.date;
-          // CORREÇÃO: Cria a chave do mapa usando MEIO-DIA UTC
-          final eventDay = DateTime.utc(localDate.year, localDate.month, localDate.day, 12);
+          final eventDay = DateTime.utc(localDate.year, localDate.month, localDate.day);
           if (_eventsMap[eventDay] == null) {
             _eventsMap[eventDay] = [];
           }

@@ -1,9 +1,11 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:nexo/screens/tela_aplicar_professor.dart';
-import 'package:nexo/screens/tela_aprovacao_professor.dart'; // <-- IMPORTAÇÃO NOVA
+import 'package:nexo/screens/tela_aprovacao_professor.dart';
 import 'package:nexo/screens/tela_dashboard_professor.dart';
 import 'package:nexo/screens/tela_moderacao.dart';
 import 'package:nexo/screens/tela_nexogo_admin.dart';
@@ -11,12 +13,16 @@ import 'package:nexo/screens/tela_politica.dart';
 import 'package:nexo/screens/tela_termos.dart';
 import 'package:nexo/services/theme_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/models.dart';
 import '../services/profile_service.dart';
 import '../utils.dart';
 import '../widgets/user_avatar.dart';
 import 'tela_gerenciar_bloqueios.dart';
 import 'package:provider/provider.dart';
+import 'dart:io' show Platform;
+
+const bool USE_EMULATOR = true;
 
 class Language {
   final Locale locale;
@@ -164,6 +170,13 @@ class _TelaPerfilState extends State<TelaPerfil> {
           _originalUsername = userProfile.username;
         }
 
+        String subscriptionText = 'Gratuito';
+        if (userProfile.subscriptionStatus == SubscriptionStatus.adFree) {
+          subscriptionText = 'Premium (Sem Anúncios)';
+        } else if (userProfile.subscriptionStatus == SubscriptionStatus.professor) {
+          subscriptionText = 'Plano Professor';
+        }
+
         return Scaffold(
           appBar: AppBar(title: Text('editProfileTitle'.tr())),
           body: Center(
@@ -213,7 +226,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
                       const Divider(height: 24),
                     ],
 
-                    if (userProfile.role == 'professor' || userProfile.role == 'super_admin') ...[
+                    if (userProfile.isPrivileged) ...[
                       ListTile(
                         leading: const Icon(Icons.dashboard_outlined),
                         title: const Text('Meu Dashboard'),
@@ -236,7 +249,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
                       ),
                       ListTile(
                         leading: const Icon(Icons.video_library_outlined),
-                        title: const Text('Meu Daxu Go (Vídeos)'),
+                        title: const Text('Meu Daxu GO (Vídeos)'),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () {
                           Navigator.of(context).push(MaterialPageRoute(
@@ -280,17 +293,44 @@ class _TelaPerfilState extends State<TelaPerfil> {
                       ),
                     const Divider(height: 48),
 
-                    if (userProfile.role == 'student')
-                      ListTile(
-                        leading: const Icon(Icons.school_outlined, color: Colors.greenAccent),
-                        title: const Text('Tornar-se um Professor'),
-                        subtitle: const Text('Acesse ferramentas exclusivas de criação.'),
-                        onTap: () {
-                           Navigator.of(context).push(MaterialPageRoute(
-                            builder: (context) => const TelaAplicarProfessor(),
-                           ));
-                        },
+                    Card(
+                      elevation: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Column(
+                          children: [
+                             ListTile(
+                              leading: const Icon(Icons.workspace_premium, color: Colors.amber),
+                              title: const Text('Status da Conta'),
+                              subtitle: Text(subscriptionText),
+                            ),
+
+                            // --- BOTÃO PROFESSOR MODIFICADO ---
+                            if (userProfile.role == 'student')
+                              ListTile(
+                                leading: const Icon(Icons.school_outlined, color: Colors.greenAccent),
+                                title: const Text('Quero ser um Professor'),
+                                subtitle: const Text('Submeta sua aplicação para análise.'),
+                                onTap: () {
+                                  Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (context) => const TelaAplicarProfessor(),
+                                  ));
+                                },
+                              ),
+                            
+                            // --- BOTÃO PREMIUM MODIFICADO ---
+                            if (userProfile.subscriptionStatus == SubscriptionStatus.free)
+                              const ListTile(
+                                leading: Icon(Icons.ads_click, color: Colors.grey),
+                                title: Text('Daxu Premium (Sem Anúncios)'),
+                                subtitle: Text('Em breve!'),
+                                enabled: false,
+                              ),
+                          ],
+                        ),
                       ),
+                    ),
+                    const SizedBox(height: 24),
 
                     ListTile(
                       leading: const Icon(Icons.person_add_alt_1_outlined, color: Colors.lightBlueAccent),

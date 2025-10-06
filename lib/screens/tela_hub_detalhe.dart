@@ -144,14 +144,6 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
                   await hubService.updateEventInHub(widget.hub.id, eventToEdit!.id, titleController.text);
                 } else {
                   final eventDate = _selectedAgendaDay ?? DateTime.now();
-                  
-                  // --- INÍCIO DO RAIO-X DE ESCRITA ---
-                  print('--- [DEBUG AGENDA - ESCRITA] ---');
-                  print('Data selecionada (objeto DateTime): $eventDate');
-                  print('É UTC?: ${eventDate.isUtc}');
-                  print('---------------------------------');
-                  // --- FIM DO RAIO-X ---
-
                   await hubService.addEventToHub(widget.hub.id, title: titleController.text, date: eventDate, meetLink: linkController.text.trim().isEmpty ? null : linkController.text.trim(), audience: linkController.text.trim().isEmpty ? null : selectedAudience.name);
                 }
               } catch (e) {
@@ -197,6 +189,7 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
           return ListView.builder(shrinkWrap: true, itemCount: decks.length, itemBuilder: (context, index) {
             final deck = decks[index];
             return ListTile(title: Text(deck.nome), onTap: () async {
+              // AQUI ESTÁ A CORREÇÃO
               final cards = await firestoreService.getCards(_currentUserId, deck.id!).first;
               await hubService.shareDeckWithHub(hubId: widget.hub.id, baralho: deck, cards: cards);
               if (mounted) {
@@ -390,7 +383,7 @@ class _DocumentosTab extends StatelessWidget {
                 ],
               ),
               onTap: () {
-                 Navigator.of(context).push(MaterialPageRoute(builder: (context) => TelaNexoPad(document: doc)));
+                  Navigator.of(context).push(MaterialPageRoute(builder: (context) => TelaNexoPad(document: doc)));
               },
             );
           },
@@ -406,28 +399,28 @@ class _BaralhosTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-     final hubService = Provider.of<NexoHubService>(context, listen: false);
-     return StreamBuilder<List<Baralho>>(
-       stream: hubService.getSharedDecksStream(hubId),
-       builder: (context, snapshot) {
-         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-         if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('Nenhum baralho compartilhado.'));
-         final decks = snapshot.data!;
-         return ListView.builder(
-           itemCount: decks.length,
-           itemBuilder: (context, index) {
-             final deck = decks[index];
-             return ListTile(
+      final hubService = Provider.of<NexoHubService>(context, listen: false);
+      return StreamBuilder<List<Baralho>>(
+        stream: hubService.getSharedDecksStream(hubId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('Nenhum baralho compartilhado.'));
+          final decks = snapshot.data!;
+          return ListView.builder(
+            itemCount: decks.length,
+            itemBuilder: (context, index) {
+              final deck = decks[index];
+              return ListTile(
                 leading: const Icon(Icons.style),
                 title: Text(deck.nome),
                 onTap: () {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (context) => TelaDetalheBaralhoCompartilhado(hubId: hubId, deckId: deck.id!, deckName: deck.nome)));
+                  Navigator.of(context).push(MaterialPageRoute(builder: (context) => TelaDetalheBaralhoCompartilhado(hubId: hubId, baralho: deck)));
                 },
-             );
-           },
-         );
-       },
-     );
+              );
+            },
+          );
+        },
+      );
   }
 }
 
