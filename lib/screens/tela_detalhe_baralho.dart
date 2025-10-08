@@ -12,7 +12,7 @@ import 'package:nexo/services/firestore_service.dart';
 import 'package:nexo/services/quiz_service.dart';
 import 'package:nexo/utils.dart';
 import 'package:provider/provider.dart';
-
+import 'package:uuid/uuid.dart';
 
 class TelaDetalheBaralho extends StatefulWidget {
   final Baralho baralho;
@@ -27,6 +27,7 @@ class _TelaDetalheBaralhoState extends State<TelaDetalheBaralho> {
   late final FirestoreService _firestoreService;
   late final QuizService _quizService;
   late final String _userId;
+  final Uuid _uuid = Uuid();
 
   @override
   void initState() {
@@ -35,7 +36,6 @@ class _TelaDetalheBaralhoState extends State<TelaDetalheBaralho> {
     _quizService = context.read<QuizService>();
     _userId = FirebaseAuth.instance.currentUser!.uid;
   }
-
 
   void _adicionarCartao() {
     final frenteController = TextEditingController();
@@ -74,11 +74,12 @@ class _TelaDetalheBaralhoState extends State<TelaDetalheBaralho> {
               onPressed: () {
                 if (formKey.currentState!.validate()) {
                   final novoCartao = Cartao(
-                    baralhoId: widget.baralho.id!,
+                    id: _uuid.v4(),
+                    baralhoId: widget.baralho.id,
                     frente: frenteController.text,
                     verso: versoController.text,
                   );
-                  _firestoreService.addCard(novoCartao, _userId, widget.baralho.id!);
+                  _firestoreService.addCard(novoCartao, _userId, widget.baralho.id);
                   Navigator.of(context).pop();
                 }
               },
@@ -110,11 +111,12 @@ class _TelaDetalheBaralhoState extends State<TelaDetalheBaralho> {
             final verso = linha[1].toString().trim();
             if (frente.isNotEmpty && verso.isNotEmpty) {
               final novoCartao = Cartao(
-                baralhoId: widget.baralho.id!,
+                id: _uuid.v4(),
+                baralhoId: widget.baralho.id,
                 frente: frente,
                 verso: verso,
               );
-              await _firestoreService.addCard(novoCartao, _userId, widget.baralho.id!);
+              await _firestoreService.addCard(novoCartao, _userId, widget.baralho.id);
               cartoesImportados++;
             }
           }
@@ -139,7 +141,7 @@ class _TelaDetalheBaralhoState extends State<TelaDetalheBaralho> {
     }
     
     try {
-      final quiz = await _quizService.createQuiz(deckId: widget.baralho.id!, title: widget.baralho.nome, cards: cards);
+      final quiz = await _quizService.createQuiz(deckId: widget.baralho.id, title: widget.baralho.nome, cards: cards);
       if (mounted) {
         Navigator.of(context).push(MaterialPageRoute(
           builder: (context) => TelaRealizarQuiz(quiz: quiz),
@@ -166,7 +168,7 @@ class _TelaDetalheBaralhoState extends State<TelaDetalheBaralho> {
       ),
     );
     if(confirmar == true && mounted) {
-      await _firestoreService.resetDeckProgress(_userId, widget.baralho.id!);
+      await _firestoreService.resetDeckProgress(_userId, widget.baralho.id);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Progresso resetado com sucesso!'), backgroundColor: Colors.green),
       );
@@ -193,7 +195,7 @@ class _TelaDetalheBaralhoState extends State<TelaDetalheBaralho> {
         ],
       ),
       body: StreamBuilder<List<Cartao>>(
-        stream: _firestoreService.getCards(_userId, widget.baralho.id!),
+        stream: _firestoreService.getCards(_userId, widget.baralho.id),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -211,18 +213,15 @@ class _TelaDetalheBaralhoState extends State<TelaDetalheBaralho> {
             children: [
               Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  alignment: WrapAlignment.center,
                   children: [
                     ElevatedButton.icon(
                       icon: const Icon(Icons.play_circle_fill),
                       label: const Text('Estudar (SRS)'),
                       onPressed: () {
-                        final cardsToReview = cartoes.where((c) => c.proximaRevisao.isBefore(DateTime.now())).toList();
-                          if (cardsToReview.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nenhum cartão para revisar hoje!')));
-                            return;
-                          }
                         Navigator.of(context).push(MaterialPageRoute(
                           builder: (context) => TelaEstudo(baralho: widget.baralho, userId: _userId),
                         ));
@@ -237,14 +236,6 @@ class _TelaDetalheBaralhoState extends State<TelaDetalheBaralho> {
                         ));
                       },
                     ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
                     ElevatedButton.icon(
                       icon: const Icon(Icons.quiz),
                       label: const Text('Gerar Prova'),
@@ -255,14 +246,14 @@ class _TelaDetalheBaralhoState extends State<TelaDetalheBaralho> {
                       label: const Text('Ver Provas'),
                       onPressed: () {
                         Navigator.of(context).push(MaterialPageRoute(
-                          builder: (context) => TelaQuizzesLista(deckId: widget.baralho.id!, deckName: widget.baralho.nome),
+                          builder: (context) => TelaQuizzesLista(deckId: widget.baralho.id, deckName: widget.baralho.nome),
                         ));
                       },
                     ),
                   ],
                 ),
               ),
-              const Divider(height: 20, thickness: 1),
+              const Divider(height: 1),
               Expanded(
                 child: ListView.builder(
                   itemCount: cartoes.length,

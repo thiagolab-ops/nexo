@@ -1,13 +1,11 @@
-import 'dart:async';
-import 'package:easy_localization/easy_localization.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:nexo/models/models.dart';
 import 'package:nexo/services/firestore_service.dart';
 import 'package:nexo/services/profile_service.dart';
 import 'package:nexo/services/srs_service.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 
 class TelaEstudo extends StatefulWidget {
   final Baralho baralho;
@@ -37,7 +35,7 @@ class _TelaEstudoState extends State<TelaEstudo> {
   }
 
   Future<void> _carregarCards() async {
-    final todosOsCards = await _firestoreService.getCards(widget.userId, widget.baralho.id!).first;
+    final todosOsCards = await _firestoreService.getCards(widget.userId, widget.baralho.id).first;
     final agora = DateTime.now();
     
     setState(() {
@@ -59,12 +57,13 @@ class _TelaEstudoState extends State<TelaEstudo> {
     Cartao cardAtual = _filaDeEstudo.first;
 
     if (qualidade < 3) {
-      cardAtual.repeticoes = 0; // Reseta o progresso do card
+      cardAtual.repeticoes = 0;
       
-      final cartaoErrado = _filaDeEstudo.removeAt(0);
-      _filaDeEstudo.add(cartaoErrado);
+      final novaFila = List<Cartao>.from(_filaDeEstudo.sublist(1));
+      novaFila.add(cardAtual);
 
       setState(() {
+        _filaDeEstudo = novaFila;
         _mostrandoVerso = false;
         _proximosIntervalos.clear();
       });
@@ -74,16 +73,14 @@ class _TelaEstudoState extends State<TelaEstudo> {
       );
     } else {
       Cartao cardAtualizado = SrsService.calcular(cardAtual, qualidade);
-
       try {
-        await _firestoreService.updateCard(widget.userId, widget.baralho.id!, cardAtualizado);
+        await _firestoreService.updateCard(widget.userId, widget.baralho.id, cardAtualizado);
         
         setState(() {
-          _filaDeEstudo.removeAt(0);
+          _filaDeEstudo = _filaDeEstudo.sublist(1);
           _mostrandoVerso = false;
           _proximosIntervalos.clear();
         });
-
       } catch (e) {
         if(mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -126,7 +123,7 @@ class _TelaEstudoState extends State<TelaEstudo> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Estudando: ${widget.baralho.nome}'), //TODO: Adicionar .tr()
+        title: Text('Estudando: ${widget.baralho.nome}'),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -173,6 +170,18 @@ class _TelaEstudoState extends State<TelaEstudo> {
             ),
           ),
         ),
+        
+        // --- PAINEL DE DEPURAÇÃO TEMPORÁRIO ---
+        if (kDebugMode)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text(
+              "DEBUG -> Repetições: ${cardAtual.repeticoes} | Intervalo: ${cardAtual.intervalo} | EF: ${cardAtual.easeFactor.toStringAsFixed(2)}",
+              style: const TextStyle(color: Colors.yellow, fontSize: 12),
+            ),
+          ),
+        // --- FIM DO PAINEL DE DEPURAÇÃO ---
+
         Expanded(
           flex: 2,
           child: _mostrandoVerso
@@ -193,7 +202,7 @@ class _TelaEstudoState extends State<TelaEstudo> {
           _calcularProximosIntervalos();
           setState(() => _mostrandoVerso = true);
         },
-        child: const Text("Mostrar Resposta", style: TextStyle(fontSize: 18)), //TODO: Adicionar .tr()
+        child: const Text("Mostrar Resposta", style: TextStyle(fontSize: 18)),
       ),
     );
   }
@@ -216,7 +225,6 @@ class _TelaEstudoState extends State<TelaEstudo> {
           spacing: 12,
           runSpacing: 12,
           children: [
-            // Textos corrigidos diretamente no código
             buildButton("Errei", 0, Colors.red[800]!),
             buildButton("Difícil", 3, Colors.orange[800]!),
             buildButton("Bom", 4, Colors.blue[800]!),
@@ -234,16 +242,16 @@ class _TelaEstudoState extends State<TelaEstudo> {
         children: [
           const Icon(Icons.check_circle, color: Colors.green, size: 80),
           const SizedBox(height: 16),
-          const Text( //TODO: Adicionar .tr()
+          const Text(
             "Sessão Concluída!",
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          const Text("Você revisou todos os cartões por hoje."), //TODO: Adicionar .tr()
+          const Text("Você revisou todos os cartões por hoje."),
           const SizedBox(height: 20),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text("Voltar para o baralho"), //TODO: Adicionar .tr()
+            child: const Text("Voltar para o baralho"),
           )
         ],
       ),

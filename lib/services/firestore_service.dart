@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final Uuid _uuid = Uuid();
   
   String get _userId {
     final user = FirebaseAuth.instance.currentUser;
@@ -11,14 +13,13 @@ class FirestoreService {
     return user.uid;
   }
 
-  // --- NOVA FUNÇÃO DE RESET ---
+  // --- MÉTODOS DE BARALHO E CARTÕES ---
+
   Future<void> resetDeckProgress(String userId, String baralhoId) async {
     final cardsRef = _db.collection('users').doc(userId).collection('baralhos').doc(baralhoId).collection('cards');
     final cardsSnapshot = await cardsRef.get();
     
-    if (cardsSnapshot.docs.isEmpty) {
-      return; // Nada a fazer se não houver cartões
-    }
+    if (cardsSnapshot.docs.isEmpty) return;
 
     final WriteBatch batch = _db.batch();
     
@@ -33,7 +34,6 @@ class FirestoreService {
     
     await batch.commit();
   }
-  // --- FIM DA NOVA FUNÇÃO ---
 
   Future<void> createDeckFromPost(Post post, List<Map<String, String>> cardsData) async {
     final batch = _db.batch();
@@ -47,8 +47,12 @@ class FirestoreService {
     });
 
     for (final cardMap in cardsData) {
+      // CORREÇÃO LÓGICA:
+      // 1. Cria a referência do documento PRIMEIRO para obter um ID.
       final newCardRef = newDeckRef.collection('cards').doc();
+      // 2. USA o ID obtido para criar o objeto Cartao.
       final newCard = Cartao(
+        id: newCardRef.id, 
         baralhoId: newDeckRef.id,
         frente: cardMap['frente']!,
         verso: cardMap['verso']!,
@@ -62,28 +66,16 @@ class FirestoreService {
     await batch.commit();
   }
 
-  Future<void> addBaralho(Baralho baralho, String userId) async {
-    await _db.collection('users').doc(userId).collection('baralhos').add({
-      'nome': baralho.nome,
-      'descricao': baralho.descricao ?? '',
-      'criadoEm': FieldValue.serverTimestamp(),
-      'ownerId': baralho.ownerId ?? userId,
-    });
+  Future<DocumentReference> addBaralho(Baralho baralho, String userId) async {
+    // Ajustado para não precisar do ID do baralho, já que o Firestore gera.
+    return await _db.collection('users').doc(userId).collection('baralhos').add(baralho.toMap());
   }
 
   Stream<List<Baralho>> getBaralhos(String userId) {
     return _db.collection('users').doc(userId).collection('baralhos')
         .orderBy('criadoEm', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) {
-              final data = doc.data();
-              return Baralho(
-                id: doc.id,
-                nome: data['nome'],
-                descricao: data['descricao'],
-                ownerId: data['ownerId'],
-              );
-            }).toList());
+        .map((snapshot) => snapshot.docs.map((doc) => Baralho.fromFirestore(doc)).toList());
   }
   
   Future<void> updateBaralho(String userId, String baralhoId, String novoNome) async {
@@ -95,7 +87,7 @@ class FirestoreService {
   }
 
   Future<void> addCard(Cartao card, String userId, String baralhoId) async {
-    await _db.collection('users').doc(userId).collection('baralhos').doc(baralhoId).collection('cards').add(card.toMap());
+    await _db.collection('users').doc(userId).collection('baralhos').doc(baralhoId).collection('cards').doc(card.id).set(card.toMap());
   }
 
   Stream<List<Cartao>> getCards(String userId, String baralhoId) {
@@ -103,9 +95,7 @@ class FirestoreService {
         .collection('cards')
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) {
-              final data = doc.data();
-              data['id'] = doc.id;
-              return Cartao.fromMap(data);
+              return Cartao.fromMap(doc.data()..['id'] = doc.id);
             }).toList());
   }
 
@@ -130,6 +120,7 @@ class FirestoreService {
     for (final doc in sharedCardsSnapshot.docs) {
       final newCardRef = newDeckRef.collection('cards').doc();
       var cardData = doc.data();
+      cardData['id'] = newCardRef.id;
       cardData['proximaRevisao'] = Timestamp.now(); 
       cardData['intervalo'] = 0;
       cardData['repeticoes'] = 0;
@@ -139,123 +130,103 @@ class FirestoreService {
     await batch.commit();
   }
 
-  CollectionReference<VideoNexo> _videoRef(String userId) {
-    return _db.collection('users').doc(userId).collection('videoteca')
-      .withConverter<VideoNexo>(
-        fromFirestore: (doc, _) => VideoNexo.fromFirestore(doc),
-        toFirestore: (video, _) => video.toMap(),
-      );
+  // --- MÉTODOS DO DAXU GO (VÍDEOS E CURSOS) ---
+
+  CollectionReference<VideoNexo> _videosCollection(String userId) => 
+    _db.collection('users').doc(userId).collection('videos').withConverter<VideoNexo>(
+      fromFirestore: (doc, _) => VideoNexo.fromFirestore(doc),
+      toFirestore: (video, _) => video.toMap(),
+    );
+
+  Stream<List<VideoNexo>> streamVideos(String userId) {
+    return _videosCollection(userId).orderBy('createdAt', descending: true).snapshots().map((snap) => snap.docs.map((doc) => doc.data()).toList());
   }
 
   Future<void> addVideo(VideoNexo video) async {
-    await _videoRef(video.ownerId).add(video);
-  }
-
-  Stream<List<VideoNexo>> streamVideos(String userId) {
-    return _videoRef(userId)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
+    await _videosCollection(_userId).doc(video.id).set(video);
   }
 
   Future<void> updateVideo(VideoNexo video) async {
-    await _videoRef(video.ownerId).doc(video.id).update(video.toMap());
+    await _videosCollection(video.ownerId).doc(video.id).update(video.toMap());
   }
 
   Future<void> deleteVideo(String userId, String videoId) async {
-    await _videoRef(userId).doc(videoId).delete();
+    await _videosCollection(userId).doc(videoId).delete();
   }
-  
-  CollectionReference<Curso> _cursosRef(String userId) {
-    return _db.collection('users').doc(userId).collection('cursos')
-      .withConverter<Curso>(
-        fromFirestore: (doc, _) => Curso.fromFirestore(doc),
-        toFirestore: (curso, _) => curso.toMap(),
-      );
-  }
-  
-  CollectionReference<Lesson> _lessonsRef(String userId, String cursoId) {
-     return _cursosRef(userId).doc(cursoId).collection('lessons')
-       .withConverter<Lesson>(
-         fromFirestore: (doc, _) => Lesson.fromFirestore(doc),
-         toFirestore: (lesson, _) => lesson.toMap(),
-       );
-  }
-  
-  CollectionReference<LessonComment> _lessonCommentsRef(String userId, String cursoId, String lessonId) {
-     return _lessonsRef(userId, cursoId).doc(lessonId).collection('comments')
-       .withConverter<LessonComment>(
-         fromFirestore: (doc, _) => LessonComment.fromFirestore(doc),
-         toFirestore: (comment, _) => comment.toMap(),
-       );
-  }
-  
-  Future<DocumentReference<Curso>> createCurso(Curso curso) async {
-    return await _cursosRef(curso.ownerId).add(curso);
-  }
-  
+
+  CollectionReference<Curso> _cursosCollection(String userId) => 
+    _db.collection('users').doc(userId).collection('cursos').withConverter<Curso>(
+      fromFirestore: (doc, _) => Curso.fromFirestore(doc),
+      toFirestore: (curso, _) => curso.toMap(),
+    );
+
   Stream<List<Curso>> streamCursos(String userId) {
-    return _cursosRef(userId)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snap) => snap.docs.map((doc) => doc.data()).toList());
+    return _cursosCollection(userId).orderBy('createdAt', descending: true).snapshots().map((snap) => snap.docs.map((doc) => doc.data()).toList());
   }
 
   Stream<DocumentSnapshot<Curso>> getCursoStream(String userId, String cursoId) {
-    return _cursosRef(userId).doc(cursoId).snapshots();
+    return _cursosCollection(userId).doc(cursoId).snapshots();
   }
-  
+
+  Future<DocumentReference<Curso>> createCurso(Curso curso) async {
+    return await _cursosCollection(_userId).add(curso);
+  }
+   
   Future<void> updateCurso(String userId, Curso curso) async {
-    await _cursosRef(userId).doc(curso.id).update(curso.toMap());
+    await _cursosCollection(userId).doc(curso.id).update(curso.toMap());
   }
 
   Future<void> deleteCurso(String userId, String cursoId) async {
-    await _cursosRef(userId).doc(cursoId).delete();
+    await _cursosCollection(userId).doc(cursoId).delete();
   }
 
-  Future<void> rateCurso(String ownerId, String cursoId, String raterUserId, int rating) async {
-    final fieldToUpdate = 'ratings.$raterUserId';
-    await _cursosRef(ownerId).doc(cursoId).update({
-      fieldToUpdate: rating,
+  Future<void> rateCurso(String ownerId, String cursoId, String raterId, int rating) async {
+    await _cursosCollection(ownerId).doc(cursoId).update({
+      'ratings.$raterId': rating,
     });
   }
-  
+
+  CollectionReference<Lesson> _lessonsCollection(String userId, String cursoId) => 
+    _cursosCollection(userId).doc(cursoId).collection('lessons').withConverter<Lesson>(
+      fromFirestore: (doc, _) => Lesson.fromFirestore(doc),
+      toFirestore: (lesson, _) => lesson.toMap(),
+    );
+
   Stream<List<Lesson>> streamLessons(String userId, String cursoId) {
-    return _lessonsRef(userId, cursoId)
-        .orderBy('orderIndex') 
-        .snapshots()
-        .map((snap) => snap.docs.map((doc) => doc.data()).toList());
+    return _lessonsCollection(userId, cursoId).orderBy('orderIndex').snapshots().map((snap) => snap.docs.map((doc) => doc.data()).toList());
   }
-  
+
   Future<void> addLesson(String userId, String cursoId, Lesson lesson) async {
-    await _lessonsRef(userId, cursoId).add(lesson);
+    await _lessonsCollection(userId, cursoId).add(lesson);
   }
 
   Future<void> updateLesson(String userId, String cursoId, Lesson lesson) async {
-    await _lessonsRef(userId, cursoId).doc(lesson.id).update(lesson.toMap());
+    await _lessonsCollection(userId, cursoId).doc(lesson.id).update(lesson.toMap());
   }
-  
+
   Future<void> deleteLesson(String userId, String cursoId, String lessonId) async {
-    await _lessonsRef(userId, cursoId).doc(lessonId).delete();
+    await _lessonsCollection(userId, cursoId).doc(lessonId).delete();
   }
-  
+
   Future<void> updateLessonOrder(String userId, String cursoId, List<Lesson> lessons) async {
     final batch = _db.batch();
-    for (int i = 0; i < lessons.length; i++) {
-      final lessonRef = _lessonsRef(userId, cursoId).doc(lessons[i].id);
-      batch.update(lessonRef, {'orderIndex': i});
+    for (var lesson in lessons) {
+      batch.update(_lessonsCollection(userId, cursoId).doc(lesson.id), {'orderIndex': lesson.orderIndex});
     }
     await batch.commit();
   }
 
+  CollectionReference<LessonComment> _commentsCollection(String userId, String cursoId, String lessonId) => 
+    _lessonsCollection(userId, cursoId).doc(lessonId).collection('comments').withConverter<LessonComment>(
+      fromFirestore: (doc, _) => LessonComment.fromFirestore(doc),
+      toFirestore: (comment, _) => comment.toMap(),
+    );
+  
   Stream<List<LessonComment>> streamLessonComments(String userId, String cursoId, String lessonId) {
-    return _lessonCommentsRef(userId, cursoId, lessonId)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snap) => snap.docs.map((doc) => doc.data()).toList());
+    return _commentsCollection(userId, cursoId, lessonId).orderBy('createdAt', descending: true).snapshots().map((snap) => snap.docs.map((doc) => doc.data()).toList());
   }
-
+  
   Future<void> addLessonComment(String userId, String cursoId, String lessonId, LessonComment comment) async {
-    await _lessonCommentsRef(userId, cursoId, lessonId).add(comment);
+    await _commentsCollection(userId, cursoId, lessonId).add(comment);
   }
 }

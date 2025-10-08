@@ -1,6 +1,4 @@
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
@@ -10,19 +8,16 @@ import 'package:nexo/screens/tela_dashboard_professor.dart';
 import 'package:nexo/screens/tela_moderacao.dart';
 import 'package:nexo/screens/tela_nexogo_admin.dart';
 import 'package:nexo/screens/tela_politica.dart';
+import 'package:nexo/screens/tela_recompensas.dart';
 import 'package:nexo/screens/tela_termos.dart';
 import 'package:nexo/services/theme_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../models/models.dart';
 import '../services/profile_service.dart';
 import '../utils.dart';
 import '../widgets/user_avatar.dart';
 import 'tela_gerenciar_bloqueios.dart';
 import 'package:provider/provider.dart';
-import 'dart:io' show Platform;
-
-const bool USE_EMULATOR = true;
 
 class Language {
   final Locale locale;
@@ -140,7 +135,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
   }
 
   void _shareInviteLink(String username) {
-    final String inviteLink = 'https://daxu.app/join?ref=$username';
+    final String inviteLink = 'https://nexo-ee9a8.web.app/join?ref=$username';
     final String text = 'Venha para o Daxu, a rede social de estudos que vai revolucionar seu aprendizado! Cadastre-se com meu link: $inviteLink';
     Share.share(text, subject: 'Convite para o Daxu');
   }
@@ -304,8 +299,6 @@ class _TelaPerfilState extends State<TelaPerfil> {
                               title: const Text('Status da Conta'),
                               subtitle: Text(subscriptionText),
                             ),
-
-                            // --- BOTÃO PROFESSOR MODIFICADO ---
                             if (userProfile.role == 'student')
                               ListTile(
                                 leading: const Icon(Icons.school_outlined, color: Colors.greenAccent),
@@ -317,8 +310,6 @@ class _TelaPerfilState extends State<TelaPerfil> {
                                   ));
                                 },
                               ),
-                            
-                            // --- BOTÃO PREMIUM MODIFICADO ---
                             if (userProfile.subscriptionStatus == SubscriptionStatus.free)
                               const ListTile(
                                 leading: Icon(Icons.ads_click, color: Colors.grey),
@@ -331,6 +322,17 @@ class _TelaPerfilState extends State<TelaPerfil> {
                       ),
                     ),
                     const SizedBox(height: 24),
+
+                    ListTile(
+                      leading: const Icon(Icons.military_tech_outlined, color: Colors.amberAccent),
+                      title: const Text('Tropa Daxu (Recompensas)'),
+                      subtitle: const Text('Veja seu progresso de convites.'),
+                      onTap: () {
+                        Navigator.of(context).push(MaterialPageRoute(
+                          builder: (context) => const TelaRecompensas(),
+                        ));
+                      },
+                    ),
 
                     ListTile(
                       leading: const Icon(Icons.person_add_alt_1_outlined, color: Colors.lightBlueAccent),

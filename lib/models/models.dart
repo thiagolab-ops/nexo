@@ -264,6 +264,8 @@ class UserModel {
   final String? stripeCustomerId;
   final SubscriptionStatus subscriptionStatus;
   final Timestamp? subscriptionEndDate;
+  final int inviteCount;
+  final String? referredBy;
 
   bool get isPrivileged => role == 'professor' || role == 'super_admin';
 
@@ -288,6 +290,8 @@ class UserModel {
     this.stripeCustomerId,
     this.subscriptionStatus = SubscriptionStatus.free,
     this.subscriptionEndDate,
+    this.inviteCount = 0,
+    this.referredBy,
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) {
@@ -313,6 +317,8 @@ class UserModel {
       stripeCustomerId: data['stripeCustomerId'],
       subscriptionStatus: SubscriptionStatus.values.byName(data['subscriptionStatus'] ?? 'free'),
       subscriptionEndDate: data['subscriptionEndDate'],
+      inviteCount: data['inviteCount'] ?? 0,
+      referredBy: data['referredBy'] as String?,
     );
   }
 
@@ -331,12 +337,14 @@ class UserModel {
       'stripeCustomerId': stripeCustomerId,
       'subscriptionStatus': subscriptionStatus.name,
       'subscriptionEndDate': subscriptionEndDate,
+      'inviteCount': inviteCount,
+      'referredBy': referredBy,
     };
   }
 }
 
 class Baralho { 
-  final String id; // Alterado para ser non-nullable, sempre vem do snapshot.id
+  final String id;
   String nome; 
   String? descricao; 
   String? ownerId;
@@ -355,7 +363,7 @@ class Baralho {
   factory Baralho.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data()!;
     return Baralho(
-      id: doc.id, // snapshot.id é sempre String e não-nulo
+      id: doc.id,
       nome: data['nome'] ?? '',
       descricao: data['descricao'],
       ownerId: data['ownerId'],
@@ -364,7 +372,7 @@ class Baralho {
 }
 
 class Cartao { 
-  String? id; 
+  final String id;
   String baralhoId; 
   String frente; 
   String verso; 
@@ -373,7 +381,7 @@ class Cartao {
   double easeFactor; 
   int repeticoes; 
   Cartao({ 
-    this.id, 
+    required this.id,
     required this.baralhoId, 
     required this.frente, 
     required this.verso, 
@@ -385,6 +393,7 @@ class Cartao {
   
   Map<String, dynamic> toMap() { 
     return { 
+      'id': id, // <<< --- A CORREÇÃO ESTÁ AQUI ---
       'baralho_id': baralhoId, 
       'frente': frente, 
       'verso': verso, 
@@ -396,16 +405,15 @@ class Cartao {
   } 
   
   factory Cartao.fromMap(Map<String, dynamic> map) { 
-    final data = map; 
     return Cartao( 
-      id: data['id'] as String?, // id pode ser nulo se não for atribuído pelo Firestore ainda
-      baralhoId: data['baralho_id'] ?? '', // Garante que baralhoId não seja nulo
-      frente: data['frente'] ?? '',
-      verso: data['verso'] ?? '',
-      proximaRevisao: (data['proximaRevisao'] as Timestamp?)?.toDate() ?? Timestamp.now().toDate(),
-      intervalo: data['intervalo'] as int? ?? 0, // Adiciona default 0 para segurança
-      easeFactor: (data['easeFactor'] as num?)?.toDouble() ?? 2.5,
-      repeticoes: data['repeticoes'] as int? ?? 0, // Adiciona default 0 para segurança
+      id: map['id'] as String,
+      baralhoId: map['baralho_id'] ?? '', 
+      frente: map['frente'] ?? '',
+      verso: map['verso'] ?? '',
+      proximaRevisao: (map['proximaRevisao'] as Timestamp?)?.toDate() ?? Timestamp.now().toDate(),
+      intervalo: map['intervalo'] as int? ?? 0,
+      easeFactor: (map['easeFactor'] as num?)?.toDouble() ?? 2.5,
+      repeticoes: map['repeticoes'] as int? ?? 0,
     ); 
   } 
 }
@@ -443,7 +451,7 @@ class NexoHub {
 }
 
 class NexoPadDocument { 
-  String id; 
+  final String id;
   String title; 
   final String ownerId; 
   String contentJson; 
@@ -669,7 +677,7 @@ class AgendaEvent {
 }
 
 class VideoNexo { // (Arquivo)
-  String id;
+  final String id;
   final String ownerId;
   String title;
   String subject;
@@ -678,7 +686,7 @@ class VideoNexo { // (Arquivo)
   final Timestamp createdAt;
 
   VideoNexo({
-    this.id = '',
+    required this.id,
     required this.ownerId,
     required this.title,
     required this.subject,
