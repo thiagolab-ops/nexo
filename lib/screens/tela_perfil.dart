@@ -4,11 +4,13 @@ import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:nexo/screens/tela_aplicar_professor.dart';
 import 'package:nexo/screens/tela_aprovacao_professor.dart';
+import 'package:nexo/screens/tela_contato.dart';
 import 'package:nexo/screens/tela_dashboard_professor.dart';
 import 'package:nexo/screens/tela_moderacao.dart';
 import 'package:nexo/screens/tela_nexogo_admin.dart';
 import 'package:nexo/screens/tela_politica.dart';
 import 'package:nexo/screens/tela_recompensas.dart';
+import 'package:nexo/screens/tela_sobre.dart';
 import 'package:nexo/screens/tela_termos.dart';
 import 'package:nexo/services/theme_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -112,7 +114,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
         }
       }
       final interestsList = _interestsController.text.trim().split(',')
-        .map((e) => e.trim().toLowerCase()).where((e) => e.isNotEmpty).toList();
+      .map((e) => e.trim().toLowerCase()).where((e) => e.isNotEmpty).toList();
       final dadosParaAtualizar = {
         'username': novoUsername,
         'bio': _bioController.text.trim(),
@@ -300,7 +302,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
                               subtitle: Text(subscriptionText),
                             ),
                             if (userProfile.role == 'student')
-                              ListTile(
+                               ListTile(
                                 leading: const Icon(Icons.school_outlined, color: Colors.greenAccent),
                                 title: const Text('Quero ser um Professor'),
                                 subtitle: const Text('Submeta sua aplicação para análise.'),
@@ -380,6 +382,24 @@ class _TelaPerfilState extends State<TelaPerfil> {
                       },
                     ),
 
+                     ListTile(
+                      leading: const Icon(Icons.info_outline),
+                      title: Text('about_us_title'.tr()),
+                      onTap: () {
+                        Navigator.of(context).push(MaterialPageRoute(
+                          builder: (context) => const TelaSobre(),
+                        ));
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.alternate_email_outlined),
+                      title: Text('contact_us_title'.tr()),
+                      onTap: () {
+                        Navigator.of(context).push(MaterialPageRoute(
+                          builder: (context) => const TelaContato(),
+                        ));
+                      },
+                    ),
                      ListTile(
                       leading: const Icon(Icons.gavel_outlined),
                       title: const Text('Termos e Condições'),

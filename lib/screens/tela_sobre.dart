@@ -1,14 +1,14 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
-class TelaPolitica extends StatelessWidget {
-  const TelaPolitica({super.key});
+class TelaSobre extends StatelessWidget {
+  const TelaSobre({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('privacy_policy_title'.tr()),
+        title: Text('about_us_title'.tr()),
       ),
       body: Center(
         child: ConstrainedBox(
@@ -16,7 +16,7 @@ class TelaPolitica extends StatelessWidget {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
             child: SelectableText(
-              'privacy_policy_body'.tr(),
+              'about_us_body'.tr(),
               textAlign: TextAlign.justify,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5, fontSize: 16),
             ),
