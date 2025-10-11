@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:nexo/models/models.dart';
 import 'package:nexo/screens/tela_agenda_hub.dart';
@@ -11,7 +12,6 @@ import 'package:nexo/widgets/user_avatar.dart';
 import 'package:nexo/services/firestore_service.dart';
 import 'package:nexo/screens/tela_detalhe_baralho_compartilhado.dart';
 import 'package:nexo/screens/tela_nexo_pad.dart';
-import 'package:nexo/screens/tela_realizar_quiz.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -89,21 +89,21 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
         return FloatingActionButton(
           heroTag: 'add_event',
           onPressed: () => _showCreateEventDialog(),
-          tooltip: 'Adicionar Evento',
+          tooltip: 'hubDetail_addEventTooltip'.tr(),
           child: const Icon(Icons.add),
         );
       case 5:
         return FloatingActionButton(
           heroTag: 'add_document',
           onPressed: () => _showCreateSharedDocumentDialog(),
-          tooltip: 'Novo Documento',
+          tooltip: 'hubDetail_newDocumentTooltip'.tr(),
           child: const Icon(Icons.note_add),
         );
       case 6:
         return FloatingActionButton(
           heroTag: 'share_deck',
           onPressed: () => _showShareDeckDialog(),
-          tooltip: 'Compartilhar Baralho Pessoal',
+          tooltip: 'hubDetail_shareDeckTooltip'.tr(),
           child: const Icon(Icons.share),
         );
       default:
@@ -119,22 +119,22 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
     Audience selectedAudience = Audience.hub;
     
     showDialog(context: context, builder: (context) => StatefulBuilder(builder: (dialogContext, setDialogState) {
-      return AlertDialog(title: Text(isEditing ? 'Editar Evento' : 'Criar Evento ou Aula'),
+      return AlertDialog(title: Text(isEditing ? 'hubDetail_editEvent'.tr() : 'hubDetail_createEvent'.tr()),
         content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(controller: titleController, autofocus: true, decoration: InputDecoration(labelText: isEditing ? 'Título do Evento' : 'Título do Evento/Aula')),
+            TextField(controller: titleController, autofocus: true, decoration: InputDecoration(labelText: isEditing ? 'hubDetail_eventTitleLabel'.tr() : 'hubDetail_eventClassTitleLabel'.tr())),
             if (_currentUserProfile!.isPrivileged && !isEditing) ...[
               const SizedBox(height: 16),
-              TextField(controller: linkController, decoration: const InputDecoration(labelText: 'Link do Google Meet (Opcional)', hintText: 'Cole para convocar uma aula')),
+              TextField(controller: linkController, decoration: InputDecoration(labelText: 'hubDetail_meetLinkLabel'.tr(), hintText: 'hubDetail_meetLinkHint'.tr())),
               const SizedBox(height: 24),
-              const Text('Se incluir um link, convocar para:', style: TextStyle(fontWeight: FontWeight.bold)),
-              RadioListTile<Audience>(title: Text('Apenas membros do Hub "${widget.hub.name}"'), value: Audience.hub, groupValue: selectedAudience, onChanged: (Audience? value) { setDialogState(() => selectedAudience = value!); }),
-              RadioListTile<Audience>(title: const Text('Todos os meus seguidores'), value: Audience.followers, groupValue: selectedAudience, onChanged: (Audience? value) { setDialogState(() => selectedAudience = value!); }),
+              Text('hubDetail_召集Label'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
+              RadioListTile<Audience>(title: Text('hubDetail_audienceHubOnly'.tr(namedArgs: {'hubName': widget.hub.name})), value: Audience.hub, groupValue: selectedAudience, onChanged: (Audience? value) { setDialogState(() => selectedAudience = value!); }),
+              RadioListTile<Audience>(title: Text('hubDetail_audienceFollowers'.tr()), value: Audience.followers, groupValue: selectedAudience, onChanged: (Audience? value) { setDialogState(() => selectedAudience = value!); }),
             ]
           ],
         )),
         actions: [
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: Text('cancelButton'.tr())),
           ElevatedButton(onPressed: () async {
             if (titleController.text.isNotEmpty) {
               Navigator.of(dialogContext).pop();
@@ -147,10 +147,10 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
                   await hubService.addEventToHub(widget.hub.id, title: titleController.text, date: eventDate, meetLink: linkController.text.trim().isEmpty ? null : linkController.text.trim(), audience: linkController.text.trim().isEmpty ? null : selectedAudience.name);
                 }
               } catch (e) {
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar evento: $e'), backgroundColor: Colors.redAccent));
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('hubDetail_eventSaveError'.tr(namedArgs: {'error': e.toString()})), backgroundColor: Colors.redAccent));
               }
             }
-          }, child: const Text('Salvar')),
+          }, child: Text('saveButton'.tr())),
         ],
       );
     }));
@@ -159,10 +159,10 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
   void _showCreateSharedDocumentDialog() {
     final titleController = TextEditingController();
     showDialog(context: context, builder: (context) => AlertDialog(
-      title: const Text('Novo Documento Compartilhado'),
-      content: TextField(controller: titleController, autofocus: true, decoration: const InputDecoration(labelText: 'Título do Documento')),
+      title: Text('hubDetail_newSharedDocumentTitle'.tr()),
+      content: TextField(controller: titleController, autofocus: true, decoration: InputDecoration(labelText: 'hubDetail_documentTitleLabel'.tr())),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text('cancelButton'.tr())),
         ElevatedButton(onPressed: () async {
           if (titleController.text.trim().isEmpty) return;
           final newDoc = await context.read<NexoHubService>().createSharedDocumentInHub(hubId: widget.hub.id, title: titleController.text.trim(), ownerId: _currentUserId);
@@ -170,7 +170,7 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
             Navigator.of(context).pop();
             Navigator.of(context).push(MaterialPageRoute(builder: (context) => TelaNexoPad(document: newDoc)));
           }
-        }, child: const Text('Criar')),
+        }, child: Text('hubDetail_createButton'.tr())),
       ],
     ));
   }
@@ -179,22 +179,21 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
     final firestoreService = context.read<FirestoreService>();
     final hubService = context.read<NexoHubService>();
     showDialog(context: context, builder: (context) => AlertDialog(
-      title: const Text('Compartilhar Baralho Pessoal'),
+      title: Text('hubDetail_sharePersonalDeckTitle'.tr()),
       content: SizedBox(width: double.maxFinite, child: StreamBuilder<List<Baralho>>(
         stream: firestoreService.getBaralhos(_currentUserId),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          if (snapshot.data!.isEmpty) return const Text('Você não possui baralhos pessoais para compartilhar.');
+          if (snapshot.data!.isEmpty) return Text('hubDetail_noPersonalDecks'.tr());
           final decks = snapshot.data!;
           return ListView.builder(shrinkWrap: true, itemCount: decks.length, itemBuilder: (context, index) {
             final deck = decks[index];
             return ListTile(title: Text(deck.nome), onTap: () async {
-              // AQUI ESTÁ A CORREÇÃO
               final cards = await firestoreService.getCards(_currentUserId, deck.id!).first;
               await hubService.shareDeckWithHub(hubId: widget.hub.id, baralho: deck, cards: cards);
               if (mounted) {
                 Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${deck.nome} compartilhado!'), backgroundColor: Colors.green));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('hubDetail_deckSharedSuccess'.tr(namedArgs: {'deckName': deck.nome})), backgroundColor: Colors.green));
               }
             });
           });
@@ -216,15 +215,15 @@ class _TelaHubDetalheState extends State<TelaHubDetalhe> with SingleTickerProvid
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
-          tabs: const [
-            Tab(icon: Icon(Icons.info_outline), text: 'Sobre'),
-            Tab(icon: Icon(Icons.people), text: 'Membros'),
-            Tab(icon: Icon(Icons.calendar_month), text: 'Agenda'),
-            Tab(icon: Icon(Icons.chat_bubble), text: 'Chat'),
-            Tab(icon: Icon(Icons.hub_outlined), text: 'Mapa'),
-            Tab(icon: Icon(Icons.note_add), text: 'Docs'),
-            Tab(icon: Icon(Icons.style), text: 'Baralhos'),
-            Tab(icon: Icon(Icons.forum), text: 'Fórum'),
+          tabs: [
+            Tab(icon: const Icon(Icons.info_outline), text: 'hubDetail_tabAbout'.tr()),
+            Tab(icon: const Icon(Icons.people), text: 'hubDetail_tabMembers'.tr()),
+            Tab(icon: const Icon(Icons.calendar_month), text: 'hubDetail_tabSchedule'.tr()),
+            Tab(icon: const Icon(Icons.chat_bubble), text: 'hubDetail_tabChat'.tr()),
+            Tab(icon: const Icon(Icons.hub_outlined), text: 'hubDetail_tabMap'.tr()),
+            Tab(icon: const Icon(Icons.note_add), text: 'hubDetail_tabDocs'.tr()),
+            Tab(icon: const Icon(Icons.style), text: 'hubDetail_tabDecks'.tr()),
+            Tab(icon: const Icon(Icons.forum), text: 'hubDetail_tabForum'.tr()),
           ],
         ),
       ),
@@ -289,8 +288,8 @@ class _HubChatWrapperState extends State<_HubChatWrapper> {
       future: _chatRoomFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return Center(child: Text('Erro ao carregar o chat: ${snapshot.error}'));
-        if (!snapshot.hasData) return const Center(child: Text('Não foi possível carregar a sala de chat.'));
+        if (snapshot.hasError) return Center(child: Text('hubDetail_chatLoadError'.tr(namedArgs: {'error': snapshot.error.toString()})));
+        if (!snapshot.hasData) return Center(child: Text('hubDetail_chatLoadErrorGeneric'.tr()));
         final chatRoom = snapshot.data!;
         return TelaChatMensagensSemAppBar(chatRoom: chatRoom);
       },
@@ -322,7 +321,7 @@ class _MembrosTab extends StatelessWidget {
       future: hubService.getHubMembers(hubId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('Nenhum membro encontrado.'));
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return Center(child: Text('hubDetail_noMembersFound'.tr()));
         final members = snapshot.data!;
         return ListView.builder(
           itemCount: members.length,
@@ -347,11 +346,11 @@ class _DocumentosTab extends StatelessWidget {
     final bool? confirm = await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Excluir Documento'),
-        content: Text('Tem certeza que deseja excluir permanentemente "${doc.title}" deste Hub?'),
+        title: Text('hubDetail_deleteDocumentTitle'.tr()),
+        content: Text('hubDetail_deleteDocumentConfirmation'.tr(namedArgs: {'docTitle': doc.title})),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancelar')),
-          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Excluir', style: TextStyle(color: Colors.red))),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text('cancelButton'.tr())),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text('hubDetail_deleteButton'.tr(), style: const TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -365,7 +364,7 @@ class _DocumentosTab extends StatelessWidget {
       stream: hubService.getSharedDocumentsStream(hubId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('Nenhum documento compartilhado.'));
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return Center(child: Text('hubDetail_noSharedDocuments'.tr()));
         final docs = snapshot.data!;
         return ListView.builder(
           itemCount: docs.length,
@@ -379,7 +378,7 @@ class _DocumentosTab extends StatelessWidget {
                   if (value == 'delete') _deleteHubDocument(context, hubService, doc);
                 },
                 itemBuilder: (BuildContext context) => [
-                  const PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete, color: Colors.redAccent), title: Text('Excluir', style: TextStyle(color: Colors.redAccent)))),
+                  PopupMenuItem(value: 'delete', child: ListTile(leading: const Icon(Icons.delete, color: Colors.redAccent), title: Text('hubDetail_deleteButton'.tr(), style: const TextStyle(color: Colors.redAccent)))),
                 ],
               ),
               onTap: () {
@@ -404,7 +403,7 @@ class _BaralhosTab extends StatelessWidget {
         stream: hubService.getSharedDecksStream(hubId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('Nenhum baralho compartilhado.'));
+          if (!snapshot.hasData || snapshot.data!.isEmpty) return Center(child: Text('hubDetail_noSharedDecks'.tr()));
           final decks = snapshot.data!;
           return ListView.builder(
             itemCount: decks.length,
@@ -469,7 +468,7 @@ class _TelaChatMensagensSemAppBarState extends State<TelaChatMensagensSemAppBar>
             stream: _chatService.getMessagesStream(widget.chatRoom.id),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-              if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('Nenhuma mensagem ainda. Diga olá!'));
+              if (!snapshot.hasData || snapshot.data!.isEmpty) return Center(child: Text('hubDetail_noMessages'.tr()));
               final messages = snapshot.data!;
               return ListView.builder(
                 reverse: true,
@@ -519,7 +518,7 @@ class _TelaChatMensagensSemAppBarState extends State<TelaChatMensagensSemAppBar>
       decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.grey.shade800))),
       child: Row(
         children: [
-          Expanded(child: TextField(controller: _messageController, decoration: const InputDecoration(hintText: 'Digite uma mensagem...', border: InputBorder.none), onSubmitted: (_) => _sendMessage())),
+          Expanded(child: TextField(controller: _messageController, decoration: InputDecoration(hintText: 'hubDetail_chatInputHint'.tr(), border: InputBorder.none), onSubmitted: (_) => _sendMessage())),
           IconButton(icon: const Icon(Icons.send), onPressed: _sendMessage),
         ],
       ),

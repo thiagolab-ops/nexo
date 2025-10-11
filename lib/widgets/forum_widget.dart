@@ -1,8 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:nexo/models/models.dart';
-import 'package:nexo/screens/tela_perfil_usuario.dart'; 
+import 'package:nexo/screens/tela_perfil_usuario.dart';
 import 'package:nexo/services/report_service.dart';
 import 'package:nexo/utils.dart';
 import 'package:nexo/widgets/user_avatar.dart';
@@ -18,7 +18,7 @@ class ForumWidget extends StatefulWidget {
     super.key,
     required this.topicsCollection,
     required this.currentUser,
-    this.enableCloseTopic = false, 
+    this.enableCloseTopic = false,
     this.enableBestAnswer = false,
   });
 
@@ -34,10 +34,10 @@ class _ForumWidgetState extends State<ForumWidget> {
   final TextEditingController _topicContentController = TextEditingController();
   final TextEditingController _topicTagsController = TextEditingController();
   final TextEditingController _replyContentController = TextEditingController();
-  final TextEditingController _searchController = TextEditingController(); 
+  final TextEditingController _searchController = TextEditingController();
 
   late final ReportService _reportService;
-  String _searchTag = ''; 
+  String _searchTag = '';
 
   @override
   void initState() {
@@ -51,20 +51,15 @@ class _ForumWidgetState extends State<ForumWidget> {
     _topicContentController.dispose();
     _topicTagsController.dispose();
     _replyContentController.dispose();
-    _searchController.dispose(); 
+    _searchController.dispose();
     super.dispose();
   }
   
-  // --- FUNÇÃO DE NAVEGAÇÃO CORRIGIDA ---
   void _navigateToProfile(String userId) {
-    // A trava "if (userId == widget.currentUser.id) return;" FOI REMOVIDA.
-    // Agora você pode clicar no seu próprio perfil.
-    
     Navigator.of(context).push(MaterialPageRoute(
       builder: (context) => TelaPerfilUsuario(userId: userId),
     ));
   }
-  // --- FIM DA CORREÇÃO ---
 
   void _selectTopic(String topicId, String title) {
     setState(() {
@@ -81,8 +76,9 @@ class _ForumWidgetState extends State<ForumWidget> {
   }
 
   String _formatTimestamp(Timestamp? timestamp) {
-    if (timestamp == null) return 'Data indisponível';
-    return DateFormat('dd/MM/yy HH:mm').format(timestamp.toDate());
+    if (timestamp == null) return 'forum_dateUnavailable'.tr();
+    // Usa o locale do contexto para formatar a data corretamente
+    return DateFormat.yMd(context.locale.toString()).add_Hm().format(timestamp.toDate());
   }
 
   void _showReportDialog({
@@ -90,9 +86,8 @@ class _ForumWidgetState extends State<ForumWidget> {
     required String contentId,
     required String contentType,
   }) {
-    // ... (função de denúncia permanece a mesma)
     final reportController = TextEditingController();
-    final reportOptions = ['Assédio', 'Discurso de Ódio', 'Spam', 'Outro'];
+    final reportOptions = ['forum_reportReasonHarassment', 'forum_reportReasonHate', 'forum_reportReasonSpam', 'forum_reportReasonOther'];
     String? selectedReason;
 
     showDialog(
@@ -100,25 +95,25 @@ class _ForumWidgetState extends State<ForumWidget> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: const Text('Denunciar Conteúdo'),
+            title: Text('forum_reportContent'.tr()),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
                   value: selectedReason,
-                  hint: const Text('Selecione um motivo'),
+                  hint: Text('forum_reportSelectReason'.tr()),
                   onChanged: (value) => setDialogState(() => selectedReason = value),
-                  items: reportOptions.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                  items: reportOptions.map((r) => DropdownMenuItem(value: r, child: Text(r.tr()))).toList(),
                 ),
-                if (selectedReason == 'Outro')
-                  TextField(controller: reportController, decoration: const InputDecoration(labelText: 'Descreva')),
+                if (selectedReason == 'forum_reportReasonOther')
+                  TextField(controller: reportController, decoration: InputDecoration(labelText: 'forum_reportDescribe'.tr())),
               ],
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
+              TextButton(onPressed: () => Navigator.of(context).pop(), child: Text('cancelButton'.tr())),
               ElevatedButton(
                 onPressed: (selectedReason != null) ? () async {
-                  final reason = (selectedReason == 'Outro') ? reportController.text.trim() : selectedReason!;
+                  final reason = (selectedReason == 'forum_reportReasonOther') ? reportController.text.trim() : selectedReason!.tr();
                   if (reason.isEmpty) return;
                   final report = ReportModel(
                     id: '',
@@ -134,14 +129,14 @@ class _ForumWidgetState extends State<ForumWidget> {
                     if (mounted) {
                       Navigator.of(context).pop();
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Denúncia enviada.'), backgroundColor: Colors.green),
+                        SnackBar(content: Text('forum_reportSuccess'.tr()), backgroundColor: Colors.green),
                       );
                     }
                   } catch (e) {
-                    if (mounted) showErrorDialog(context, 'Erro', e.toString());
+                    if (mounted) showErrorDialog(context, 'post_reportErrorTitle'.tr(), e.toString());
                   }
                 } : null,
-                child: const Text('Enviar'),
+                child: Text('forum_reportSubmit'.tr()),
               ),
             ],
           );
@@ -158,7 +153,6 @@ class _ForumWidgetState extends State<ForumWidget> {
   }
 
   Widget _buildTopicsListView() {
-    // ... (build da lista de tópicos permanece o mesmo)
     return ListView(
       padding: const EdgeInsets.all(16.0),
       children: [
@@ -169,7 +163,7 @@ class _ForumWidgetState extends State<ForumWidget> {
           child: TextField(
             controller: _searchController,
             decoration: InputDecoration(
-              labelText: 'Buscar por Tema (ex: inglês)',
+              labelText: 'forum_searchByTag'.tr(),
               suffixIcon: IconButton(
                 icon: const Icon(Icons.search),
                 onPressed: () {
@@ -186,7 +180,7 @@ class _ForumWidgetState extends State<ForumWidget> {
             },
           ),
         ),
-        Text(_searchTag.isEmpty ? "Tópicos Recentes" : "Resultados para: '$_searchTag'", 
+        Text(_searchTag.isEmpty ? "forum_recentTopics".tr() : "forum_searchResultsFor".tr(namedArgs: {'searchTag': _searchTag}),
             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
         const SizedBox(height: 10),
         _buildTopicsList(),
@@ -195,34 +189,33 @@ class _ForumWidgetState extends State<ForumWidget> {
   }
 
   Widget _buildNewTopicForm() {
-    // ... (build do formulário permanece o mesmo)
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text("Iniciar um novo tópico", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text("forum_startNewTopic".tr(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             TextField(
               controller: _topicTitleController,
-              decoration: const InputDecoration(labelText: 'Título da sua dúvida'),
+              decoration: InputDecoration(labelText: 'forum_topicTitleLabel'.tr()),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _topicTagsController,
-              decoration: const InputDecoration(labelText: 'Temas (ex: inglês, verbos, direito)', helperText: 'Separados por vírgula'),
+              decoration: InputDecoration(labelText: 'forum_topicTagsLabel'.tr(), helperText: 'forum_topicTagsHelper'.tr()),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _topicContentController,
-              decoration: const InputDecoration(labelText: 'Descreva sua dúvida em detalhes...'),
+              decoration: InputDecoration(labelText: 'forum_topicContentLabel'.tr()),
               maxLines: 4,
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _addTopic,
-              child: const Text('PUBLICAR TÓPICO'),
+              child: Text('forum_publishTopicButton'.tr()),
             ),
           ],
         ),
@@ -231,7 +224,6 @@ class _ForumWidgetState extends State<ForumWidget> {
   }
 
   Widget _buildTopicsList() {
-    // ... (lógica de query permanece a mesma)
     Query query;
     final tag = _searchTag.trim().toLowerCase();
 
@@ -247,10 +239,10 @@ class _ForumWidgetState extends State<ForumWidget> {
       stream: query.snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return Center(child: Text("Erro ao carregar tópicos. Você já fez o deploy dos índices do Firebase?"));
+          return Center(child: Text("forum_loadTopicsError".tr()));
         }
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.data!.docs.isEmpty) return const Center(child: Text("Nenhum tópico encontrado."));
+        if (snapshot.data!.docs.isEmpty) return Center(child: Text("forum_noTopicsFound".tr()));
 
         return ListView.builder(
           shrinkWrap: true,
@@ -260,7 +252,7 @@ class _ForumWidgetState extends State<ForumWidget> {
             final doc = snapshot.data!.docs[index];
             final data = doc.data() as Map<String, dynamic>;
             
-            final String authorUsername = data['authorUsername'] ?? 'Usuário Deletado';
+            final String authorUsername = data['authorUsername'] ?? 'forum_deletedUser'.tr();
             final String authorPhotoUrl = data['authorPhotoUrl'] ?? '';
             final String authorId = data['authorId'] ?? '';
             final bool isClosed = data['isClosed'] ?? false;
@@ -271,10 +263,10 @@ class _ForumWidgetState extends State<ForumWidget> {
               color: isClosed ? Colors.grey[900] : null,
               child: ListTile(
                 leading: InkWell(
-                  onTap: () => _navigateToProfile(authorId), // <-- Chama a função corrigida
+                  onTap: () => _navigateToProfile(authorId),
                   child: UserAvatar(username: authorUsername, photoUrl: authorPhotoUrl, radius: 20),
                 ),
-                title: Text(data['title'] ?? 'Sem título', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                title: Text(data['title'] ?? 'forum_noTitle'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -285,12 +277,12 @@ class _ForumWidgetState extends State<ForumWidget> {
                     if (tags.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 8.0),
-                        child: Text("Temas: ${tags.join(', ')}", style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey)),
+                        child: Text("forum_tagsLabel".tr(namedArgs: {'tags': tags.join(', ')}), style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey)),
                       ),
                     InkWell(
-                      onTap: () => _navigateToProfile(authorId), // <-- Chama a função corrigida
+                      onTap: () => _navigateToProfile(authorId),
                       child: Text(
-                        'Por: $authorUsername em ${_formatTimestamp(data['createdAt'])}',
+                        'forum_byUserAtTime'.tr(namedArgs: {'username': authorUsername, 'timestamp': _formatTimestamp(data['createdAt'])}),
                         style: const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                     ),
@@ -313,7 +305,6 @@ class _ForumWidgetState extends State<ForumWidget> {
   }
 
   Widget _buildSingleTopicView(String topicId, String topicTitle) {
-    // ... (Esta função permanece a mesma)
     return Scaffold(
        appBar: AppBar(
         title: Text(topicTitle, overflow: TextOverflow.ellipsis),
@@ -326,10 +317,10 @@ class _ForumWidgetState extends State<ForumWidget> {
           stream: widget.topicsCollection.doc(topicId).snapshots(),
           builder: (context, snapshot) {
               if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-              if (!snapshot.data!.exists) return const Center(child: Text("Tópico não encontrado."));
+              if (!snapshot.data!.exists) return Center(child: Text("forum_topicNotFound".tr()));
               
               final topicData = snapshot.data!.data() as Map<String, dynamic>;
-              final authorUsername = topicData['authorUsername'] ?? 'Usuário Deletado';
+              final authorUsername = topicData['authorUsername'] ?? 'forum_deletedUser'.tr();
               final authorPhotoUrl = topicData['authorPhotoUrl'] ?? '';
               final authorId = topicData['authorId'] ?? '';
               final bool isOwner = authorId == widget.currentUser.id;
@@ -342,66 +333,72 @@ class _ForumWidgetState extends State<ForumWidget> {
                   children: [
                       Card(
                           child: Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                      ListTile(
-                                        leading: InkWell(
-                                          onTap: () => _navigateToProfile(authorId),
-                                          child: UserAvatar(username: authorUsername, photoUrl: authorPhotoUrl)
-                                        ),
-                                        title: Text(topicData['title'] ?? 'Sem título', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                                        subtitle: InkWell(
-                                          onTap: () => _navigateToProfile(authorId),
-                                          child: Text('Por: $authorUsername\nEm: ${_formatTimestamp(topicData['createdAt'])}', style: const TextStyle(fontSize: 12, color: Colors.grey))
-                                        ),
-                                        trailing: PopupMenuButton<String>(
-                                          onSelected: (value) {
-                                            if (value == 'report') {
-                                                _showReportDialog(reportedUserId: authorId, contentId: topicId, contentType: 'forum_topic');
-                                            }
-                                            if (value == 'close') {
-                                                widget.topicsCollection.doc(topicId).update({'isClosed': true});
-                                            }
-                                          },
-                                          itemBuilder: (context) => [
-                                            if (!isOwner)
-                                              const PopupMenuItem(
-                                                value: 'report',
-                                                child: ListTile(leading: Icon(Icons.report_problem_outlined, color: Colors.yellowAccent), title: Text('Denunciar Tópico')),
-                                              ),
-                                            if (isOwner && !isClosed && widget.enableCloseTopic)
-                                              const PopupMenuItem(
-                                                value: 'close',
-                                                child: ListTile(leading: Icon(Icons.lock_outline), title: Text('Fechar Tópico')),
-                                              ),
-                                          ],
-                                        ),
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                    ListTile(
+                                      leading: InkWell(
+                                        onTap: () => _navigateToProfile(authorId),
+                                        child: UserAvatar(username: authorUsername, photoUrl: authorPhotoUrl)
                                       ),
-                                      const Divider(height: 20),
+                                      title: Text(topicData['title'] ?? 'forum_noTitle'.tr(), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                                      subtitle: InkWell(
+                                        onTap: () => _navigateToProfile(authorId),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text('forum_byUser'.tr(namedArgs: {'username': authorUsername})),
+                                            Text('forum_atTime'.tr(namedArgs: {'timestamp': _formatTimestamp(topicData['createdAt'])}), style: const TextStyle(fontSize: 12, color: Colors.grey))
+                                          ],
+                                        )
+                                      ),
+                                      trailing: PopupMenuButton<String>(
+                                        onSelected: (value) {
+                                          if (value == 'report') {
+                                              _showReportDialog(reportedUserId: authorId, contentId: topicId, contentType: 'forum_topic');
+                                          }
+                                          if (value == 'close') {
+                                              widget.topicsCollection.doc(topicId).update({'isClosed': true});
+                                          }
+                                        },
+                                        itemBuilder: (context) => [
+                                          if (!isOwner)
+                                            PopupMenuItem(
+                                              value: 'report',
+                                              child: ListTile(leading: const Icon(Icons.report_problem_outlined, color: Colors.yellowAccent), title: Text('forum_reportTopic'.tr())),
+                                            ),
+                                          if (isOwner && !isClosed && widget.enableCloseTopic)
+                                            PopupMenuItem(
+                                              value: 'close',
+                                              child: ListTile(leading: const Icon(Icons.lock_outline), title: Text('forum_closeTopic'.tr())),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Divider(height: 20),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                                      child: Text(topicData['content'] ?? '', style: const TextStyle(fontSize: 16, height: 1.5)),
+                                    ),
+                                    if (tags.isNotEmpty)
                                       Padding(
                                         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                                        child: Text(topicData['content'] ?? '', style: const TextStyle(fontSize: 16, height: 1.5)),
+                                        child: Text("forum_tagsLabel".tr(namedArgs: {'tags': tags.join(', ')}), style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey)),
                                       ),
-                                      if (tags.isNotEmpty)
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                                          child: Text("Temas: ${tags.join(', ')}", style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey)),
-                                        ),
-                                  ],
-                              ),
+                                ],
+                            ),
                           ),
                       ),
                       const SizedBox(height: 24),
-                      const Text("Respostas", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                      Text("forum_replies".tr(), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 10),
                       _buildRepliesList(topicId, isOwner, isClosed, bestAnswerId),
                       const SizedBox(height: 24),
                       if (!isClosed)
                         _buildReplyForm(topicId)
                       else 
-                        const Center(child: Padding(padding: EdgeInsets.all(24.0), child: Text("Este tópico foi fechado pelo autor.", style: TextStyle(color: Colors.yellowAccent)))),
+                        Center(child: Padding(padding: const EdgeInsets.all(24.0), child: Text("forum_topicClosed".tr(), style: const TextStyle(color: Colors.yellowAccent)))),
                   ],
               );
           },
@@ -410,16 +407,15 @@ class _ForumWidgetState extends State<ForumWidget> {
   }
   
   Widget _buildRepliesList(String topicId, bool isTopicOwner, bool isTopicClosed, String? bestAnswerId) {
-    // ... (Esta função permanece a mesma, já estava correta)
     return StreamBuilder<QuerySnapshot>(
         stream: widget.topicsCollection.doc(topicId).collection('replies').orderBy('createdAt').snapshots(),
         builder: (context, snapshot) {
-             if (snapshot.hasError) return const Text("Erro ao carregar respostas.");
-             if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-             if (snapshot.data!.docs.isEmpty) return const Center(child: Padding(
-               padding: EdgeInsets.all(16.0),
-               child: Text("Nenhuma resposta ainda. Seja o primeiro!"),
-             ));
+            if (snapshot.hasError) return Text("forum_loadRepliesError".tr());
+            if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+            if (snapshot.data!.docs.isEmpty) return Center(child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text("forum_noReplies".tr()),
+            ));
 
             return ListView.builder(
                 shrinkWrap: true,
@@ -428,7 +424,7 @@ class _ForumWidgetState extends State<ForumWidget> {
                 itemBuilder: (context, index) {
                     final doc = snapshot.data!.docs[index];
                     final data = doc.data() as Map<String, dynamic>;
-                    final authorUsername = data['authorUsername'] ?? 'Usuário Deletado';
+                    final authorUsername = data['authorUsername'] ?? 'forum_deletedUser'.tr();
                     final authorPhotoUrl = data['authorPhotoUrl'] ?? '';
                     final authorId = data['authorId'] ?? '';
                     final bool isBestAnswer = doc.id == bestAnswerId;
@@ -441,39 +437,39 @@ class _ForumWidgetState extends State<ForumWidget> {
                           side: BorderSide(color: isBestAnswer ? Colors.greenAccent : Colors.transparent, width: 2)
                         ),
                         child: ListTile(
-                           leading: InkWell(
-                             onTap: () => _navigateToProfile(authorId),
-                             child: UserAvatar(username: authorUsername, photoUrl: authorPhotoUrl, radius: 18)
-                           ),
-                           title: Text(data['content'] ?? ''),
-                           subtitle: InkWell(
-                             onTap: () => _navigateToProfile(authorId),
-                             child: Text('Por: $authorUsername em ${_formatTimestamp(data['createdAt'])}', style: const TextStyle(fontSize: 12, color: Colors.grey))
-                           ),
-                           trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (isBestAnswer) const Icon(Icons.check_circle, color: Colors.greenAccent),
-                              if (widget.enableBestAnswer && isTopicOwner && !isTopicClosed && !isBestAnswer)
-                                IconButton(
-                                  icon: const Icon(Icons.check_box_outline_blank, color: Colors.greenAccent),
-                                  tooltip: 'Marcar como Melhor Resposta',
-                                  onPressed: () {
-                                    widget.topicsCollection.doc(topicId).update({'bestAnswerId': doc.id});
-                                  },
-                                ),
-                              if (authorId != widget.currentUser.id) 
-                                IconButton(
-                                  icon: const Icon(Icons.report_problem_outlined, color: Colors.yellowAccent, size: 20),
-                                  tooltip: 'Denunciar Resposta',
-                                  onPressed: () => _showReportDialog(
-                                    reportedUserId: authorId,
-                                    contentId: doc.id,
-                                    contentType: 'forum_reply',
+                            leading: InkWell(
+                              onTap: () => _navigateToProfile(authorId),
+                              child: UserAvatar(username: authorUsername, photoUrl: authorPhotoUrl, radius: 18)
+                            ),
+                            title: Text(data['content'] ?? ''),
+                            subtitle: InkWell(
+                              onTap: () => _navigateToProfile(authorId),
+                              child: Text('forum_byUserAtTime'.tr(namedArgs: {'username': authorUsername, 'timestamp': _formatTimestamp(data['createdAt'])}), style: const TextStyle(fontSize: 12, color: Colors.grey))
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (isBestAnswer) const Icon(Icons.check_circle, color: Colors.greenAccent),
+                                if (widget.enableBestAnswer && isTopicOwner && !isTopicClosed && !isBestAnswer)
+                                  IconButton(
+                                    icon: const Icon(Icons.check_box_outline_blank, color: Colors.greenAccent),
+                                    tooltip: 'forum_markAsBestAnswer'.tr(),
+                                    onPressed: () {
+                                      widget.topicsCollection.doc(topicId).update({'bestAnswerId': doc.id});
+                                    },
                                   ),
-                                ),
-                            ],
-                           ),
+                                if (authorId != widget.currentUser.id) 
+                                  IconButton(
+                                    icon: const Icon(Icons.report_problem_outlined, color: Colors.yellowAccent, size: 20),
+                                    tooltip: 'forum_reportReply'.tr(),
+                                    onPressed: () => _showReportDialog(
+                                      reportedUserId: authorId,
+                                      contentId: doc.id,
+                                      contentType: 'forum_reply',
+                                    ),
+                                  ),
+                              ],
+                            ),
                         ),
                     );
                 },
@@ -483,24 +479,23 @@ class _ForumWidgetState extends State<ForumWidget> {
   }
 
   Widget _buildReplyForm(String topicId) {
-    // ... (Esta função permanece a mesma)
       return Card(
         child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                     const Text("Deixe uma resposta", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                     const SizedBox(height: 16),
+                      Text("forum_leaveReply".tr(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 16),
                     TextField(
                         controller: _replyContentController,
-                        decoration: const InputDecoration(labelText: 'Sua resposta...'),
+                        decoration: InputDecoration(labelText: 'forum_yourReply'.tr()),
                         maxLines: 3,
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
                         onPressed: () => _addReply(topicId),
-                        child: const Text('ENVIAR RESPOSTA'),
+                        child: Text('forum_sendReplyButton'.tr()),
                     ),
                 ],
             ),
@@ -509,7 +504,6 @@ class _ForumWidgetState extends State<ForumWidget> {
   }
 
   Future<void> _addTopic() async {
-    // ... (Esta função permanece a mesma)
     if (_topicTitleController.text.isNotEmpty && _topicContentController.text.isNotEmpty) {
       
       final tags = _topicTagsController.text
@@ -535,13 +529,12 @@ class _ForumWidgetState extends State<ForumWidget> {
       _topicTagsController.clear();
       
       if (mounted) {
-         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tópico criado com sucesso!')));
+         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('forum_topicCreateSuccess'.tr())));
       }
     }
   }
   
   Future<void> _addReply(String topicId) async {
-    // ... (Esta função permanece a mesma)
       if(_replyContentController.text.isNotEmpty) {
           await widget.topicsCollection.doc(topicId).collection('replies').add({
               'content': _replyContentController.text,
@@ -552,7 +545,7 @@ class _ForumWidgetState extends State<ForumWidget> {
           });
           _replyContentController.clear();
           if (mounted) {
-             FocusScope.of(context).unfocus();
+              FocusScope.of(context).unfocus();
           }
       }
   }

@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:nexo/models/models.dart';
@@ -28,16 +29,16 @@ class _TelaFeedState extends State<TelaFeed> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(child: Text('Erro ao carregar o feed: ${snapshot.error}'));
+            return Center(child: Text('feed_loadError'.tr(namedArgs: {'error': snapshot.error.toString()})));
           }
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(
+            return Center(
               child: Padding(
-                padding: EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(16.0),
                 child: Text(
-                  'Seu feed está vazio. Siga outros usuários para ver os posts deles aqui!',
+                  'feed_empty'.tr(),
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16),
+                  style: const TextStyle(fontSize: 16),
                 ),
               ),
             );
@@ -52,13 +53,12 @@ class _TelaFeedState extends State<TelaFeed> {
           );
         },
       ),
-      // ## INÍCIO DA MUDANÇA: Botão de criar post agora mora aqui ##
       floatingActionButton: StreamBuilder<UserModel?>(
         stream: _profileService.getUserProfileStream(_currentUserId!),
         builder: (context, snapshot) {
           if (snapshot.hasData && snapshot.data!.role == 'professor') {
             return FloatingActionButton(
-              heroTag: 'fab_feed', // Hero tag diferente para evitar conflitos
+              heroTag: 'fab_feed',
               onPressed: () {
                 Navigator.of(context).push(MaterialPageRoute(
                   builder: (context) => const TelaCriarPost(),
@@ -68,10 +68,9 @@ class _TelaFeedState extends State<TelaFeed> {
               child: const Icon(Icons.add),
             );
           }
-          return const SizedBox.shrink(); // Não mostra nada se não for professor
+          return const SizedBox.shrink();
         }
       ),
-      // ## FIM DA MUDANÇA ##
     );
   }
 }

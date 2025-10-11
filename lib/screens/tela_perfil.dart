@@ -1,8 +1,8 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
-import 'package:nexo/screens/tela_aplicar_professor.dart';
 import 'package:nexo/screens/tela_aprovacao_professor.dart';
 import 'package:nexo/screens/tela_contato.dart';
 import 'package:nexo/screens/tela_dashboard_professor.dart';
@@ -20,6 +20,7 @@ import '../utils.dart';
 import '../widgets/user_avatar.dart';
 import 'tela_gerenciar_bloqueios.dart';
 import 'package:provider/provider.dart';
+import 'dart:js' as js;
 
 class Language {
   final Locale locale;
@@ -39,15 +40,16 @@ class TelaPerfil extends StatefulWidget {
 class _TelaPerfilState extends State<TelaPerfil> {
   late final ProfileService _profileService;
   final _formKey = GlobalKey<FormState>();
-  
+
   late TextEditingController _usernameController;
   late TextEditingController _bioController;
   late TextEditingController _interestsController;
-  
+
   String _originalUsername = '';
   bool _isSaving = false;
   bool _isUploading = false;
-  
+  bool _isProcessingPayment = false;
+
   final List<Language> supportedLanguages = [
     Language(const Locale('pt'), 'Português', '🇧🇷'),
     Language(const Locale('en'), 'English', '🇺🇸'),
@@ -69,6 +71,37 @@ class _TelaPerfilState extends State<TelaPerfil> {
     _interestsController.dispose();
     super.dispose();
   }
+  
+  Future<void> _initiateCheckout(String priceId) async {
+    setState(() => _isProcessingPayment = true);
+    try {
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+      final callable = functions.httpsCallable('createCheckoutSession');
+      
+      final response = await callable.call<Map<String, dynamic>>({
+        'priceId': priceId,
+      });
+
+      final sessionUrl = response.data['sessionUrl'];
+      if (sessionUrl != null) {
+        js.context.callMethod('open', [sessionUrl, '_self']);
+      } else {
+        throw Exception('URL da sessão de checkout não recebida.');
+      }
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) {
+        showErrorDialog(context, 'payment_processingError'.tr(), 'Código: ${e.code}\nMensagem: ${e.message}');
+      }
+    } catch (e) {
+      if (mounted) {
+        showErrorDialog(context, 'payment_unexpectedError'.tr(), e.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessingPayment = false);
+      }
+    }
+  }
 
   Future<void> _pickAndUploadImage() async {
     setState(() => _isUploading = true);
@@ -84,7 +117,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
         await _profileService.uploadProfilePicture(uid: widget.userId, imageData: jpgBytes);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Foto de perfil atualizada!'), backgroundColor: Colors.green),
+            SnackBar(content: Text('profile_photoSuccess'.tr()), backgroundColor: Colors.green),
           );
         }
       }
@@ -96,7 +129,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
       if (mounted) setState(() => _isUploading = false);
     }
   }
-  
+
   Future<void> _salvarAlteracoes() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
@@ -107,7 +140,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
         if (!isUnique) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(backgroundColor: Colors.redAccent, content: Text('Este @username já está em uso.')),
+              SnackBar(backgroundColor: Colors.redAccent, content: Text('profile_usernameInUse'.tr())),
             );
           }
           return;
@@ -137,9 +170,9 @@ class _TelaPerfilState extends State<TelaPerfil> {
   }
 
   void _shareInviteLink(String username) {
-    final String inviteLink = 'https://nexo-ee9a8.web.app/join?ref=$username';
-    final String text = 'Venha para o Daxu, a rede social de estudos que vai revolucionar seu aprendizado! Cadastre-se com meu link: $inviteLink';
-    Share.share(text, subject: 'Convite para o Daxu');
+    final String inviteLink = 'https://daxu.app/join?ref=$username';
+    final String text = 'profile_inviteShareText'.tr(namedArgs: {'invite_link': inviteLink});
+    Share.share(text, subject: 'profile_inviteShareSubject'.tr());
   }
 
   @override
@@ -148,7 +181,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
     final isDarkMode = themeProvider.isDarkMode;
     final currentLocale = context.locale;
     final currentLang = supportedLanguages.firstWhere(
-      (lang) => lang.locale == currentLocale, 
+      (lang) => lang.locale == currentLocale,
       orElse: () => supportedLanguages.first,
     );
 
@@ -167,11 +200,16 @@ class _TelaPerfilState extends State<TelaPerfil> {
           _originalUsername = userProfile.username;
         }
 
-        String subscriptionText = 'Gratuito';
-        if (userProfile.subscriptionStatus == SubscriptionStatus.adFree) {
-          subscriptionText = 'Premium (Sem Anúncios)';
-        } else if (userProfile.subscriptionStatus == SubscriptionStatus.professor) {
-          subscriptionText = 'Plano Professor';
+        String subscriptionText;
+        switch (userProfile.subscriptionStatus) {
+          case SubscriptionStatus.adFree:
+            subscriptionText = 'profile_subscriptionAdFree'.tr();
+            break;
+          case SubscriptionStatus.professor:
+            subscriptionText = 'profile_subscriptionProfessor'.tr();
+            break;
+          default:
+            subscriptionText = 'profile_subscriptionFree'.tr();
         }
 
         return Scaffold(
@@ -212,7 +250,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
                     if (userProfile.role == 'super_admin') ...[
                        ListTile(
                         leading: const Icon(Icons.admin_panel_settings_outlined, color: Colors.amber),
-                        title: const Text('Aprovar Professores'),
+                        title: Text('profile_approveTeachers'.tr()),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () {
                           Navigator.of(context).push(MaterialPageRoute(
@@ -226,7 +264,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
                     if (userProfile.isPrivileged) ...[
                       ListTile(
                         leading: const Icon(Icons.dashboard_outlined),
-                        title: const Text('Meu Dashboard'),
+                        title: Text('profile_myDashboard'.tr()),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () {
                           Navigator.of(context).push(MaterialPageRoute(
@@ -236,7 +274,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
                       ),
                       ListTile(
                         leading: const Icon(Icons.security),
-                        title: const Text('Moderação de Conteúdo'),
+                        title: Text('profile_contentModeration'.tr()),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () {
                           Navigator.of(context).push(MaterialPageRoute(
@@ -246,7 +284,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
                       ),
                       ListTile(
                         leading: const Icon(Icons.video_library_outlined),
-                        title: const Text('Meu Daxu GO (Vídeos)'),
+                        title: Text('profile_myDaxuGo'.tr()),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () {
                           Navigator.of(context).push(MaterialPageRoute(
@@ -274,7 +312,10 @@ class _TelaPerfilState extends State<TelaPerfil> {
                           const SizedBox(height: 16),
                           TextFormField(
                             controller: _interestsController,
-                            decoration: const InputDecoration(labelText: 'Interesses', helperText: 'Separe por vírgulas'),
+                            decoration: InputDecoration(
+                              labelText: 'profile_interestsLabel'.tr(),
+                              helperText: 'profile_interestsHelper'.tr(),
+                            ),
                           ),
                         ],
                       ),
@@ -290,45 +331,48 @@ class _TelaPerfilState extends State<TelaPerfil> {
                       ),
                     const Divider(height: 48),
 
-                    Card(
-                      elevation: 2,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8.0),
-                        child: Column(
-                          children: [
-                             ListTile(
-                              leading: const Icon(Icons.workspace_premium, color: Colors.amber),
-                              title: const Text('Status da Conta'),
-                              subtitle: Text(subscriptionText),
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Card(
+                          elevation: 2,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0),
+                            child: Column(
+                              children: [
+                                 ListTile(
+                                  leading: const Icon(Icons.workspace_premium, color: Colors.amber),
+                                  title: Text('profile_accountStatus'.tr()),
+                                  subtitle: Text(subscriptionText),
+                                ),
+                                if (userProfile.role == 'student')
+                                   ListTile(
+                                    leading: const Icon(Icons.school_outlined, color: Colors.greenAccent),
+                                    title: Text('profile_wannaBeTeacher'.tr()),
+                                    subtitle: Text('profile_wannaBeTeacherSubtitle'.tr()),
+                                    onTap: _isProcessingPayment ? null : () => _initiateCheckout('price_1SEHBUQmCOX7rhgS4e52lP2c'),
+                                  ),
+                                if (userProfile.subscriptionStatus == SubscriptionStatus.free)
+                                  ListTile(
+                                    leading: const Icon(Icons.ads_click, color: Colors.grey),
+                                    title: Text('profile_premiumComingSoon'.tr()),
+                                    subtitle: Text('profile_premiumSubtitle'.tr()),
+                                    onTap: _isProcessingPayment ? null : () => _initiateCheckout('price_1SEHJXQmCOX7rhgSog6j9j4F'),
+                                  ),
+                              ],
                             ),
-                            if (userProfile.role == 'student')
-                               ListTile(
-                                leading: const Icon(Icons.school_outlined, color: Colors.greenAccent),
-                                title: const Text('Quero ser um Professor'),
-                                subtitle: const Text('Submeta sua aplicação para análise.'),
-                                onTap: () {
-                                  Navigator.of(context).push(MaterialPageRoute(
-                                    builder: (context) => const TelaAplicarProfessor(),
-                                  ));
-                                },
-                              ),
-                            if (userProfile.subscriptionStatus == SubscriptionStatus.free)
-                              const ListTile(
-                                leading: Icon(Icons.ads_click, color: Colors.grey),
-                                title: Text('Daxu Premium (Sem Anúncios)'),
-                                subtitle: Text('Em breve!'),
-                                enabled: false,
-                              ),
-                          ],
+                          ),
                         ),
-                      ),
+                        if (_isProcessingPayment)
+                          const CircularProgressIndicator(),
+                      ],
                     ),
                     const SizedBox(height: 24),
 
                     ListTile(
                       leading: const Icon(Icons.military_tech_outlined, color: Colors.amberAccent),
-                      title: const Text('Tropa Daxu (Recompensas)'),
-                      subtitle: const Text('Veja seu progresso de convites.'),
+                      title: Text('profile_rewards'.tr()),
+                      subtitle: Text('profile_rewardsSubtitle'.tr()),
                       onTap: () {
                         Navigator.of(context).push(MaterialPageRoute(
                           builder: (context) => const TelaRecompensas(),
@@ -338,12 +382,12 @@ class _TelaPerfilState extends State<TelaPerfil> {
 
                     ListTile(
                       leading: const Icon(Icons.person_add_alt_1_outlined, color: Colors.lightBlueAccent),
-                      title: const Text('Convidar Amigos'),
+                      title: Text('profile_inviteFriends'.tr()),
                       onTap: () => _shareInviteLink(userProfile.username),
                     ),
 
                     SwitchListTile(
-                      title: const Text('Modo Escuro'),
+                      title: Text('profile_darkMode'.tr()),
                       secondary: Icon(isDarkMode ? Icons.dark_mode_outlined : Icons.light_mode_outlined),
                       value: isDarkMode,
                       onChanged: (bool newValue) {
@@ -354,9 +398,9 @@ class _TelaPerfilState extends State<TelaPerfil> {
 
                     DropdownButtonFormField<Language>(
                       value: currentLang,
-                      decoration: const InputDecoration(
-                        labelText: 'Idioma do Aplicativo',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: 'profile_appLanguage'.tr(),
+                        border: const OutlineInputBorder(),
                       ),
                       items: supportedLanguages.map((Language lang) {
                         return DropdownMenuItem<Language>(
@@ -402,7 +446,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
                     ),
                      ListTile(
                       leading: const Icon(Icons.gavel_outlined),
-                      title: const Text('Termos e Condições'),
+                      title: Text('terms_of_use_title'.tr()),
                       onTap: () {
                         Navigator.of(context).push(MaterialPageRoute(
                           builder: (context) => const TelaTermos(),
@@ -411,7 +455,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
                     ),
                      ListTile(
                       leading: const Icon(Icons.policy_outlined),
-                      title: const Text('Política de Uso e Abuso'),
+                      title: Text('privacy_policy_title'.tr()),
                       onTap: () {
                         Navigator.of(context).push(MaterialPageRoute(
                           builder: (context) => const TelaPolitica(),

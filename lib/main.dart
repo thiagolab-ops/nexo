@@ -10,6 +10,8 @@ import 'package:nexo/nexo_theme.dart';
 import 'package:nexo/screens/tela_baralhos_lista.dart';
 import 'package:nexo/screens/tela_daxu_chan.dart';
 import 'package:nexo/screens/tela_notificacoes.dart';
+import 'package:nexo/screens/tela_payment_cancel.dart';
+import 'package:nexo/screens/tela_payment_success.dart';
 import 'package:nexo/screens/tela_perfil.dart';
 import 'package:nexo/services/chat_service.dart';
 import 'package:nexo/services/feed_service.dart';
@@ -69,7 +71,6 @@ Future<void> _connectToEmulators() async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Configura a WebView para a plataforma web
   if (kIsWeb) {
     WebViewPlatform.instance = WebWebViewPlatform();
   }
@@ -79,7 +80,6 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   
-  // Se estiver em modo debug e a constante USE_EMULATOR for true, conecta aos emuladores
   if (kDebugMode && USE_EMULATOR) {
     await _connectToEmulators();
   }
@@ -136,8 +136,14 @@ class MyApp extends StatelessWidget {
                   theme: NexoTheme.light,
                   darkTheme: NexoTheme.dark,
                   themeMode: themeProvider.themeMode,
-                  home: const AuthGate(),
                   debugShowCheckedModeBanner: false,
+                  // ## AQUI ESTÁ A MUDANÇA: 'home' foi trocado por 'initialRoute' e 'routes' ##
+                  initialRoute: '/',
+                  routes: {
+                    '/': (context) => const AuthGate(),
+                    '/payment-success': (context) => const TelaPaymentSuccess(),
+                    '/payment-cancel': (context) => const TelaPaymentCancel(),
+                  },
                 );
               },
             ),
@@ -157,29 +163,16 @@ class TelaPrincipal extends StatefulWidget {
 
 class _TelaPrincipalState extends State<TelaPrincipal> {
   int _indiceAtual = 0;
-  
-  late final List<Widget> _telas;
 
   @override
   void initState() {
     super.initState();
     _checkCustomClaims();
-
-    _telas = [
-      TelaBaralhosLista(showNewDeckDialog: _mostrarDialogoNovoBaralho),
-      const TelaHubsLista(),
-      const TelaNexoPadLista(),
-      const TelaDaxuChan(),
-      const TelaFeed(),
-      const TelaPlayLista(),
-      const TelaSocialNova(),
-    ];
   }
   
   void _checkCustomClaims() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      // Forçar a atualização do token para pegar os claims mais recentes
       final idTokenResult = await user.getIdTokenResult(true); 
       if(kDebugMode) {
         print('--- [CUSTOM CLAIMS DEBUG] ---');
@@ -195,7 +188,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: Text(baralhoExistente == null ? 'newDeckDialogTitle'.tr() : 'Editar Nome'),
+          title: Text(baralhoExistente == null ? 'newDeckDialogTitle'.tr() : 'main_editDeckName'.tr()),
           content: TextField(
             controller: nomeController,
             autofocus: true,
@@ -213,7 +206,6 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                   final firestoreService = context.read<FirestoreService>();
                   final userId = FirebaseAuth.instance.currentUser!.uid;
                   if (baralhoExistente != null) {
-                    // AQUI ESTÁ A CORREÇÃO DE NULIDADE
                     await firestoreService.updateBaralho(userId, baralhoExistente.id!, nome);
                   } else {
                     final novoBaralho = Baralho(id: '', nome: nome, ownerId: userId);
@@ -241,7 +233,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
         final hubService = context.read<NexoHubService>();
         
         return AlertDialog(
-          title: const Text('Criar Novo Hub'),
+          title: Text('main_createNewHub'.tr()),
           content: Form(
             key: formKey,
             child: Column(
@@ -250,13 +242,13 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                 TextFormField(
                   controller: nameController,
                   autofocus: true,
-                  decoration: const InputDecoration(labelText: 'Nome do Hub'),
+                  decoration: InputDecoration(labelText: 'main_hubName'.tr()),
                   validator: (value) =>
-                      value!.trim().isEmpty ? 'O nome é obrigatório.' : null,
+                      value!.trim().isEmpty ? 'main_hubNameRequired'.tr() : null,
                 ),
                 TextFormField(
                   controller: descriptionController,
-                  decoration: const InputDecoration(labelText: 'Descrição (Opcional)'),
+                  decoration: InputDecoration(labelText: 'main_hubDescription'.tr()),
                 ),
               ],
             ),
@@ -264,7 +256,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancelar'),
+              child: Text('cancelButton'.tr()),
             ),
             ElevatedButton(
               onPressed: () async {
@@ -276,12 +268,12 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                   if (mounted) {
                     Navigator.of(dialogContext).pop();
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Hub criado com sucesso!'), backgroundColor: Colors.green),
+                      SnackBar(content: Text('main_hubCreateSuccess'.tr()), backgroundColor: Colors.green),
                     );
                   }
                 }
               },
-              child: const Text('Criar'),
+              child: Text('hubDetail_createButton'.tr()),
             ),
           ],
         );
@@ -289,7 +281,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
     );
   }
 
-  Widget? _buildFloatingActionButton(BuildContext context, UserModel userProfile) {
+  Widget? _buildFloatingActionButton(BuildContext context, UserModel userProfile, List<Widget> telas) {
     switch (_indiceAtual) {
       case 0:
         return FloatingActionButton(
@@ -303,7 +295,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
         return FloatingActionButton(
           heroTag: 'add_hub',
           onPressed: _showCreateHubDialog,
-          tooltip: 'Criar Hub',
+          tooltip: 'main_createHubTooltip'.tr(),
           child: const Icon(Icons.add),
         );
 
@@ -319,7 +311,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
               ));
             }
           },
-          tooltip: 'Novo Documento',
+          tooltip: 'main_newDocumentTooltip'.tr(),
           child: const Icon(Icons.add),
         );
       case 4:
@@ -332,7 +324,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                 fullscreenDialog: true,
               ));
             },
-            tooltip: 'Criar Post',
+            tooltip: 'main_createPostTooltip'.tr(),
             child: const Icon(Icons.add),
           );
         }
@@ -345,6 +337,16 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
   @override
   Widget build(BuildContext context) {
     final userProfile = Provider.of<UserModel?>(context);
+
+    final List<Widget> telas = [
+      TelaBaralhosLista(showNewDeckDialog: _mostrarDialogoNovoBaralho),
+      TelaHubsLista(),
+      TelaNexoPadLista(),
+      TelaDaxuChan(),
+      TelaFeed(),
+      TelaPlayLista(),
+      TelaSocialNova(),
+    ];
 
     if (userProfile == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -362,7 +364,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.notifications_none),
-                    tooltip: 'Notificações',
+                    tooltip: 'main_notificationsTooltip'.tr(),
                     onPressed: () {
                       Navigator.of(context).push(MaterialPageRoute(
                         builder: (context) => const TelaNotificacoes(),
@@ -404,9 +406,9 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
       ),
       body: IndexedStack(
         index: _indiceAtual,
-        children: _telas,
+        children: telas,
       ),
-      floatingActionButton: _buildFloatingActionButton(context, userProfile),
+      floatingActionButton: _buildFloatingActionButton(context, userProfile, telas),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _indiceAtual,
         onTap: (indice) => setState(() => _indiceAtual = indice),

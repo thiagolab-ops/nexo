@@ -8,29 +8,37 @@ const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
 admin.initializeApp();
 const db = admin.firestore();
 
-exports.createCheckoutSession = functions.https.onCall({secrets: [stripeSecretKey]}, async (data, context) => {
+// ## INÍCIO DA CORREÇÃO: Sintaxe atualizada para v2 das Cloud Functions ##
+exports.createCheckoutSession = functions.https.onCall({secrets: [stripeSecretKey]}, async (request) => {
   const stripe = require("stripe")(stripeSecretKey.value());
-  if (!context.auth) {
+
+  if (!request.auth) {
     throw new functions.https.HttpsError("unauthenticated", "A função deve ser chamada por um usuário autenticado.");
   }
-  const userId = context.auth.uid;
-  const priceId = data.priceId;
+
+  const userId = request.auth.uid;
+  const priceId = request.data.priceId;
   const userRef = db.collection("users").doc(userId);
   const userDoc = await userRef.get();
+
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError("not-found", "Usuário não encontrado no Firestore.");
+  }
+
   const userData = userDoc.data();
   let stripeCustomerId = userData.stripeCustomerId;
+
   if (!stripeCustomerId) {
     const customer = await stripe.customers.create({
-      email: context.auth.token.email,
+      email: request.auth.token.email,
       metadata: {firebaseUID: userId},
     });
     stripeCustomerId = customer.id;
     await userRef.update({stripeCustomerId: stripeCustomerId});
   }
 
-  // TODO: Em produção, mude para o domínio real (daxu.app)
-  const successUrl = "http://localhost:5000/";
-  const cancelUrl = "http://localhost:5000/";
+  const successUrl = "https://daxu.app/payment-success";
+  const cancelUrl = "https://daxu.app/payment-cancel";
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -47,6 +55,7 @@ exports.createCheckoutSession = functions.https.onCall({secrets: [stripeSecretKe
     throw new functions.https.HttpsError("internal", "Não foi possível criar a sessão de checkout.");
   }
 });
+// ## FIM DA CORREÇÃO ##
 
 exports.deleteHub = functions.https.onCall(async (request) => {
   if (!request.auth) {
@@ -281,17 +290,16 @@ exports.processarConvite = functions.https.onCall(async (data, context) => {
   const newUserRef = usersRef.doc(newUserId);
   const referrerRef = usersRef.doc(referrerId);
 
-  // MERGE a lógica de Co-Nexo e a lógica viral em updates únicos
   batch.update(newUserRef, {
     followingIds: admin.firestore.FieldValue.arrayUnion(referrerId),
     followerIds: admin.firestore.FieldValue.arrayUnion(referrerId),
-    referredBy: referrerId, // <-- Carimbo de origem
+    referredBy: referrerId,
   });
 
   batch.update(referrerRef, {
     followerIds: admin.firestore.FieldValue.arrayUnion(newUserId),
     followingIds: admin.firestore.FieldValue.arrayUnion(newUserId),
-    inviteCount: admin.firestore.FieldValue.increment(1), // <-- Incremento do contador
+    inviteCount: admin.firestore.FieldValue.increment(1),
   });
 
   const notifForReferrer = {text: `Você e ${newUserDoc.data().username} agora são Co-Nexos!`, sourceType: "new_conexo", sourceId: newUserId, createdAt: admin.firestore.FieldValue.serverTimestamp(), isRead: false};

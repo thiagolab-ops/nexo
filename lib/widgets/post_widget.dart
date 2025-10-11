@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:nexo/models/models.dart';
@@ -24,7 +25,6 @@ class PostWidget extends StatefulWidget {
 
 class _PostWidgetState extends State<PostWidget> {
   final FeedService _feedService = FeedService();
-  final FirestoreService _firestoreService = FirestoreService();
   final ReportService _reportService = ReportService();
   final String? _currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
@@ -51,7 +51,7 @@ class _PostWidgetState extends State<PostWidget> {
   
   void _showReportDialog() {
     String? selectedReason;
-    final reasons = ['Spam', 'Conteúdo de Ódio', 'Assédio ou Bullying', 'Outro'];
+    final reasons = ['post_reportReasonSpam', 'post_reportReasonHate', 'post_reportReasonHarassment', 'post_reportReasonOther'];
     
     showDialog(
       context: context,
@@ -59,13 +59,14 @@ class _PostWidgetState extends State<PostWidget> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Denunciar Post'),
+              title: Text('post_reportTitle'.tr()),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Por favor, selecione o motivo da denúncia:'),
+                  Text('post_reportReasonPrompt'.tr()),
                   ...reasons.map((reason) => RadioListTile<String>(
-                    title: Text(reason),
+                    title: Text(reason.tr()),
                     value: reason,
                     groupValue: selectedReason,
                     onChanged: (value) {
@@ -77,7 +78,7 @@ class _PostWidgetState extends State<PostWidget> {
                 ],
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
+                TextButton(onPressed: () => Navigator.of(context).pop(), child: Text('cancelButton'.tr())),
                 ElevatedButton(
                   onPressed: selectedReason == null ? null : () async {
                     final navigator = Navigator.of(context);
@@ -91,7 +92,7 @@ class _PostWidgetState extends State<PostWidget> {
                       reportedUserId: widget.post.authorId,
                       contentId: widget.post.id,
                       contentType: 'post',
-                      reason: selectedReason!,
+                      reason: selectedReason!.tr(), // Salva a razão já traduzida
                       createdAt: Timestamp.now(),
                     );
                     
@@ -99,14 +100,14 @@ class _PostWidgetState extends State<PostWidget> {
                       await _reportService.submitReport(report);
                       navigator.pop();
                       messenger.showSnackBar(
-                        const SnackBar(content: Text('Denúncia enviada com sucesso. Agradecemos sua colaboração!'), backgroundColor: Colors.green),
+                        SnackBar(content: Text('post_reportSuccess'.tr()), backgroundColor: Colors.green),
                       );
                     } catch (e) {
-                       navigator.pop();
-                       showErrorDialog(context, 'Erro', 'Não foi possível enviar a denúncia.');
+                        navigator.pop();
+                        showErrorDialog(context, 'post_reportErrorTitle'.tr(), 'post_reportErrorBody'.tr());
                     }
                   },
-                  child: const Text('Enviar Denúncia'),
+                  child: Text('post_reportSubmitButton'.tr()),
                 ),
               ],
             );
@@ -125,8 +126,11 @@ class _PostWidgetState extends State<PostWidget> {
   }
   
   void _sharePost() {
-    final textToShare = 'Confira este post de @${widget.post.authorUsername} no app Nexo!\n\n"${widget.post.text}"';
-    Share.share(textToShare, subject: 'Post de ${widget.post.authorUsername}');
+    final textToShare = 'post_shareText'.tr(namedArgs: {
+      'username': widget.post.authorUsername,
+      'postText': widget.post.text,
+    });
+    Share.share(textToShare, subject: 'post_shareSubject'.tr(namedArgs: {'username': widget.post.authorUsername}));
   }
 
   void _handleCreateDeck() {
@@ -141,7 +145,6 @@ class _PostWidgetState extends State<PostWidget> {
 
   @override
   Widget build(BuildContext context) {
-    timeago.setLocaleMessages('pt_BR', timeago.PtBrMessages());
     final bool isOwnPost = widget.post.authorId == _currentUserId;
 
     return Container(
@@ -169,7 +172,7 @@ class _PostWidgetState extends State<PostWidget> {
                     children: [
                       Text(widget.post.authorUsername, style: const TextStyle(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
                       Text(
-                        timeago.format(widget.post.createdAt.toDate(), locale: 'pt_BR'),
+                        timeago.format(widget.post.createdAt.toDate(), locale: context.locale.toStringWithSeparator(separator: '_')),
                         style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
                       ),
                     ],
@@ -184,9 +187,9 @@ class _PostWidgetState extends State<PostWidget> {
                     }
                   },
                   itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                    const PopupMenuItem<String>(
+                    PopupMenuItem<String>(
                       value: 'report',
-                      child: Text('Denunciar'),
+                      child: Text('post_reportAction'.tr()),
                     ),
                   ],
                 ),
@@ -220,7 +223,7 @@ class _PostWidgetState extends State<PostWidget> {
                 ),
                 _buildActionButton(
                   icon: Icons.share_outlined,
-                  label: 'Compartilhar',
+                  label: 'post_shareAction'.tr(),
                   onTap: _sharePost,
                 ),
                 const Spacer(),

@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:nexo/models/models.dart';
@@ -22,7 +23,6 @@ class _TelaNexoPadListaState extends State<TelaNexoPadLista> {
   @override
   void initState() {
     super.initState();
-    // Nós lemos os serviços do Provider aqui, pois são necessários para as ações do menu
     _nexoPadService = context.read<NexoPadService>();
     _hubService = context.read<NexoHubService>();
   }
@@ -31,13 +31,13 @@ class _TelaNexoPadListaState extends State<TelaNexoPadLista> {
     final bool? confirm = await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Excluir Documento'),
-        content: Text('Tem certeza que deseja excluir permanentemente "${doc.title}"?'),
+        title: Text('pad_deleteTitle'.tr()),
+        content: Text('pad_deleteConfirmation'.tr(namedArgs: {'docTitle': doc.title})),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text('cancelButton'.tr())),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+            child: Text('hubDetail_deleteButton'.tr(), style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -47,7 +47,7 @@ class _TelaNexoPadListaState extends State<TelaNexoPadLista> {
       await _nexoPadService.deleteDocument(doc.id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('"${doc.title}" excluído.'), backgroundColor: Colors.green),
+          SnackBar(content: Text('pad_deleteSuccess'.tr(namedArgs: {'docTitle': doc.title})), backgroundColor: Colors.green),
         );
       }
     }
@@ -64,14 +64,14 @@ class _TelaNexoPadListaState extends State<TelaNexoPadLista> {
           }
           if (snapshot.data!.isEmpty) {
             return AlertDialog(
-              title: const Text('Compartilhar no Hub'),
-              content: const Text('Você precisa ser membro de um Hub para poder compartilhar.'),
-              actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('OK'))],
+              title: Text('pad_shareToHubTitle'.tr()),
+              content: Text('pad_shareWarningNoHubs'.tr()),
+              actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: Text('pad_okButton'.tr()))],
             );
           }
           final hubs = snapshot.data!;
           return AlertDialog(
-            title: const Text('Compartilhar em qual Hub?'),
+            title: Text('pad_shareWhichHubTitle'.tr()),
             content: SizedBox(
               width: double.maxFinite,
               child: ListView.builder(
@@ -83,16 +83,15 @@ class _TelaNexoPadListaState extends State<TelaNexoPadLista> {
                     title: Text(hub.name),
                     onTap: () async {
                       Navigator.of(context).pop(); // Fecha o diálogo
-                      // Cria uma cópia no Hub com o conteúdo do documento pessoal
                       await _hubService.createSharedDocumentInHub(
                         hubId: hub.id,
                         title: doc.title,
                         ownerId: _currentUserId,
-                        initialContentJson: doc.contentJson, // Passa o conteúdo atual
+                        initialContentJson: doc.contentJson,
                       );
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Documento compartilhado em "${hub.name}"!'), backgroundColor: Colors.green),
+                          SnackBar(content: Text('pad_shareSuccess'.tr(namedArgs: {'hubName': hub.name})), backgroundColor: Colors.green),
                         );
                       }
                     },
@@ -116,20 +115,21 @@ class _TelaNexoPadListaState extends State<TelaNexoPadLista> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(child: Text('Erro: ${snapshot.error}'));
+            return Center(child: Text('pad_genericError'.tr(namedArgs: {'error': snapshot.error.toString()})));
           }
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('Nenhum documento ainda.\nClique em + para criar um.'));
+            return Center(child: Text('pad_emptyState'.tr()));
           }
           final documents = snapshot.data!;
           return ListView.builder(
             itemCount: documents.length,
             itemBuilder: (context, index) {
               final doc = documents[index];
+              final timeAgoString = timeago.format(doc.lastEdited.toDate(), locale: context.locale.toStringWithSeparator(separator: '_'));
               return ListTile(
                 leading: const Icon(Icons.edit_document),
                 title: Text(doc.title),
-                subtitle: Text('Editado ${timeago.format(doc.lastEdited.toDate(), locale: 'pt_BR')}'),
+                subtitle: Text('pad_edited'.tr(namedArgs: {'timeago': timeAgoString})),
                 trailing: PopupMenuButton<String>(
                   onSelected: (value) {
                     if (value == 'share') {
@@ -139,13 +139,13 @@ class _TelaNexoPadListaState extends State<TelaNexoPadLista> {
                     }
                   },
                   itemBuilder: (BuildContext context) => [
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'share',
-                      child: ListTile(leading: Icon(Icons.share), title: Text('Compartilhar no Hub')),
+                      child: ListTile(leading: const Icon(Icons.share), title: Text('pad_shareAction'.tr())),
                     ),
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'delete',
-                      child: ListTile(leading: Icon(Icons.delete, color: Colors.redAccent), title: Text('Excluir', style: TextStyle(color: Colors.redAccent))),
+                      child: ListTile(leading: const Icon(Icons.delete, color: Colors.redAccent), title: Text('hubDetail_deleteButton'.tr(), style: const TextStyle(color: Colors.redAccent))),
                     ),
                   ],
                 ),
@@ -159,7 +159,6 @@ class _TelaNexoPadListaState extends State<TelaNexoPadLista> {
           );
         },
       ),
-      // O FAB é controlado pela TelaPrincipal
     );
   }
 }
