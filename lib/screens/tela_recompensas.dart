@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nexo/models/models.dart';
@@ -18,11 +19,11 @@ class TelaRecompensas extends StatelessWidget {
     }
 
     final double progresso = userProfile.inviteCount / metaConvites;
-    final String linkConvite = 'https://nexo-ee9a8.web.app/join?ref=${userProfile.username}';
+    final String linkConvite = 'https://daxu.app/join?ref=${userProfile.username}';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Programa de Recompensas'),
+        title: Text('rewards_title'.tr()),
       ),
       body: Center(
         child: ConstrainedBox(
@@ -34,30 +35,30 @@ class TelaRecompensas extends StatelessWidget {
               children: [
                 const Icon(Icons.military_tech, size: 80, color: Colors.amber),
                 const SizedBox(height: 16),
-                const Text(
-                  'Tropa Daxu', // NOME ALTERADO
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                Text(
+                  'rewards_pageTitle'.tr(),
+                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Convide novos usuários para a plataforma e ganhe prêmios exclusivos!',
+                Text(
+                  'rewards_description'.tr(),
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16),
+                  style: const TextStyle(fontSize: 16),
                 ),
                 const SizedBox(height: 32),
-                const Text(
-                  'SUA META',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey),
+                Text(
+                  'rewards_yourGoal'.tr(),
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   '${userProfile.inviteCount} / $metaConvites',
                   style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
                 ),
-                const Text('Usuários convidados'),
+                Text('rewards_invitedUsers'.tr()),
                 const SizedBox(height: 16),
                 LinearProgressIndicator(
-                  value: progresso > 1.0 ? 1.0 : progresso, // Garante que a barra não passe de 100%
+                  value: progresso > 1.0 ? 1.0 : progresso,
                   minHeight: 12,
                   borderRadius: BorderRadius.circular(6),
                 ),
@@ -68,20 +69,20 @@ class TelaRecompensas extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Recompensa Final:',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        Text(
+                          'rewards_finalReward'.tr(),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                         const Divider(),
                         ListTile(
                           leading: Icon(Icons.workspace_premium, color: Colors.purple.shade300),
-                          title: const Text('Assinatura Premium Vitalícia'),
-                          subtitle: const Text('Acesso para sempre, sem anúncios.'),
+                          title: Text('rewards_premiumTitle'.tr()),
+                          subtitle: Text('rewards_premiumSubtitle'.tr()),
                         ),
-                        const ListTile(
-                          leading: Icon(Icons.verified, color: Colors.blueAccent),
-                          title: Text("Selo Exclusivo de 'Membro Fundador'"),
-                          subtitle: Text('Uma marca permanente no seu perfil.'),
+                        ListTile(
+                          leading: const Icon(Icons.verified, color: Colors.blueAccent),
+                          title: Text('rewards_badgeTitle'.tr()),
+                          subtitle: Text('rewards_badgeSubtitle'.tr()),
                         ),
                       ],
                     ),
@@ -90,15 +91,15 @@ class TelaRecompensas extends StatelessWidget {
                 const SizedBox(height: 32),
                 ElevatedButton.icon(
                   icon: const Icon(Icons.copy),
-                  label: const Text('Copiar Meu Link de Convite'),
+                  label: Text('rewards_copyLinkButton'.tr()),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   ),
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: linkConvite));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Link copiado para a área de transferência!'),
+                      SnackBar(
+                        content: Text('rewards_copyLinkSuccess'.tr()),
                         backgroundColor: Colors.green,
                       ),
                     );

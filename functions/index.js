@@ -8,7 +8,6 @@ const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
 admin.initializeApp();
 const db = admin.firestore();
 
-// ## INÍCIO DA CORREÇÃO: Sintaxe atualizada para v2 das Cloud Functions ##
 exports.createCheckoutSession = functions.https.onCall({secrets: [stripeSecretKey]}, async (request) => {
   const stripe = require("stripe")(stripeSecretKey.value());
 
@@ -55,7 +54,6 @@ exports.createCheckoutSession = functions.https.onCall({secrets: [stripeSecretKe
     throw new functions.https.HttpsError("internal", "Não foi possível criar a sessão de checkout.");
   }
 });
-// ## FIM DA CORREÇÃO ##
 
 exports.deleteHub = functions.https.onCall(async (request) => {
   if (!request.auth) {
@@ -225,10 +223,10 @@ exports.onAulaConvocada = functions.firestore.onDocumentCreated("hubs/{hubId}/ev
   return batch.commit();
 });
 
-exports.followUser = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "...");
-  const {uid} = context.auth;
-  const {userId: targetUserId} = data;
+exports.followUser = functions.https.onCall(async (request) => {
+  if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "...");
+  const uid = request.auth.uid;
+  const targetUserId = request.data.userId;
   if (!targetUserId) throw new functions.https.HttpsError("invalid-argument", "...");
   const currentUserRef = db.collection("users").doc(uid);
   const targetUserRef = db.collection("users").doc(targetUserId);
@@ -257,10 +255,10 @@ exports.followUser = functions.https.onCall(async (data, context) => {
   return {status: "success"};
 });
 
-exports.unfollowUser = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "...");
-  const {uid} = context.auth;
-  const {userId: targetUserId} = data;
+exports.unfollowUser = functions.https.onCall(async (request) => {
+  if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "...");
+  const uid = request.auth.uid;
+  const targetUserId = request.data.userId;
   if (!targetUserId) throw new functions.https.HttpsError("invalid-argument", "...");
   const batch = db.batch();
   batch.update(db.collection("users").doc(uid), {followingIds: admin.firestore.FieldValue.arrayRemove(targetUserId)});
@@ -269,10 +267,10 @@ exports.unfollowUser = functions.https.onCall(async (data, context) => {
   return {status: "success"};
 });
 
-exports.processarConvite = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "...");
-  const newUserId = context.auth.uid;
-  const {referralUsername} = data;
+exports.processarConvite = functions.https.onCall(async (request) => {
+  if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "...");
+  const newUserId = request.auth.uid;
+  const {referralUsername} = request.data;
   if (!referralUsername) throw new functions.https.HttpsError("invalid-argument", "...");
   const usersRef = db.collection("users");
   const q = await usersRef.where("username", "==", referralUsername).limit(1).get();
@@ -351,5 +349,51 @@ exports.processHubInvite = functions.firestore.onDocumentUpdated("hub_invites/{i
     batch.update(db.collection("chatRooms").doc(hubId), {memberIds: admin.firestore.FieldValue.arrayUnion(toUserId)});
     batch.delete(event.data.after.ref);
     await batch.commit();
+  }
+});
+
+exports.checkInviteRewards = functions.firestore.onDocumentUpdated("users/{userId}", async (event) => {
+  const beforeData = event.data.before.data();
+  const afterData = event.data.after.data();
+
+  if (beforeData.inviteCount === afterData.inviteCount) {
+    return null;
+  }
+  if (afterData.inviteCount < 50) {
+    return null;
+  }
+  if (afterData.hasFounderReward === true) {
+    return null;
+  }
+
+  logger.info(`CONCEDENDO RECOMPENSA DE FUNDADOR PARA O USUÁRIO: ${event.params.userId}`);
+  const userRef = db.collection("users").doc(event.params.userId);
+
+  const batch = db.batch();
+
+  batch.update(userRef, {
+    hasFounderReward: true,
+    subscriptionStatus: "adFree",
+    badges: admin.firestore.FieldValue.arrayUnion("founder"),
+  });
+
+  const notificationRef = userRef.collection("notifications").doc();
+  const notificationPayload = {
+    text: "Parabéns! Você alcançou a meta da Tropa Daxu e ganhou Premium Vitalício e o selo de Fundador!",
+    sourceType: "tropa_daxu_reward",
+    sourceId: "daxu_system",
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    isRead: false,
+  };
+  batch.set(notificationRef, notificationPayload);
+  batch.update(userRef, {unreadNotificationCount: admin.firestore.FieldValue.increment(1)});
+
+  try {
+    await batch.commit();
+    logger.info(`Recompensa concedida com sucesso para ${event.params.userId}.`);
+    return {status: "success"};
+  } catch (error) {
+    logger.error(`Erro ao conceder recompensa para ${event.params.userId}:`, error);
+    return {status: "error"};
   }
 });

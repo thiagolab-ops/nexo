@@ -1,6 +1,7 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:nexo/screens/tela_chat_mensagens.dart';
-import 'package:nexo/screens/tela_nexogo_publica.dart'; 
+import 'package:nexo/screens/tela_nexogo_publica.dart';
 import 'package:nexo/screens/widgets_perfil/perfil_forum_tab.dart';
 import 'package:nexo/services/chat_service.dart';
 import 'package:provider/provider.dart';
@@ -30,7 +31,7 @@ class _TelaPerfilUsuarioState extends State<TelaPerfilUsuario> with SingleTicker
   
   void _initTabs(UserModel user) {
     int count = 2; // Sobre, Tópicos
-    if (user.isPrivileged) { // Usando a nova lógica centralizada
+    if (user.isPrivileged) {
       count++; // Adiciona a aba "Daxu GO"
     }
 
@@ -59,7 +60,7 @@ class _TelaPerfilUsuarioState extends State<TelaPerfilUsuario> with SingleTicker
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Não foi possível iniciar o chat: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('userProfile_chatError'.tr(namedArgs: {'error': e.toString()})), backgroundColor: Colors.red),
         );
       }
     }
@@ -81,24 +82,20 @@ class _TelaPerfilUsuarioState extends State<TelaPerfilUsuario> with SingleTicker
         final expectedTabCount = userProfile.isPrivileged ? 3 : 2;
         if (_tabController == null || _tabController!.length != expectedTabCount) {
            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) _initTabs(userProfile);
+             if (mounted) _initTabs(userProfile);
            });
         }
 
-        final bool isFollowing = currentUserProfile.followingIds.contains(userProfile.id);
-        final bool isFollower = userProfile.followingIds.contains(currentUserProfile.id);
-        final bool isCoNexo = isFollowing && isFollower;
-
         List<Widget> tabs = [
-          const Tab(text: 'Sobre'),
-          const Tab(text: 'Tópicos no Fórum'),
+          Tab(text: 'userProfile_tabAbout'.tr()),
+          Tab(text: 'userProfile_tabForumTopics'.tr()),
         ];
         if (userProfile.isPrivileged) {
-          tabs.add(const Tab(text: 'Daxu GO'));
+          tabs.add(Tab(text: 'userProfile_tabDaxuGo'.tr()));
         }
         
         List<Widget> tabViews = [
-           _buildSobreTab(userProfile, currentUserProfile, isCoNexo, isFollowing),
+           _buildSobreTab(userProfile, currentUserProfile),
            PerfilForumTab(userId: userProfile.id),
         ];
         if (userProfile.isPrivileged) {
@@ -125,7 +122,11 @@ class _TelaPerfilUsuarioState extends State<TelaPerfilUsuario> with SingleTicker
     );
   }
 
-  Widget _buildSobreTab(UserModel userProfile, UserModel currentUserProfile, bool isCoNexo, bool isFollowing) {
+  Widget _buildSobreTab(UserModel userProfile, UserModel currentUserProfile) {
+    final bool isFollowing = currentUserProfile.followingIds.contains(userProfile.id);
+    final bool isFollower = userProfile.followingIds.contains(currentUserProfile.id);
+    final bool isCoNexo = isFollowing && isFollower;
+    
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24.0),
       child: Center(
@@ -134,8 +135,23 @@ class _TelaPerfilUsuarioState extends State<TelaPerfilUsuario> with SingleTicker
           children: [
             UserAvatar(username: userProfile.username, photoUrl: userProfile.photoUrl, radius: 60),
             const SizedBox(height: 16),
-            Text(userProfile.username, style: Theme.of(context).textTheme.headlineSmall),
-            Text(userProfile.email),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(userProfile.username, style: Theme.of(context).textTheme.headlineSmall),
+                if (userProfile.badges.contains('founder')) ...[
+                  const SizedBox(width: 8),
+                  Chip(
+                    avatar: Icon(Icons.verified, color: Colors.blue.shade300, size: 18),
+                    label: Text('userProfile_founderBadge'.tr()),
+                    labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+                    backgroundColor: Colors.blue.withOpacity(0.1),
+                    side: BorderSide(color: Colors.blue.shade300),
+                  )
+                ]
+              ],
+            ),
             const SizedBox(height: 16),
             Text(userProfile.bio, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
             const SizedBox(height: 32),
@@ -143,7 +159,7 @@ class _TelaPerfilUsuarioState extends State<TelaPerfilUsuario> with SingleTicker
             if (isCoNexo) ...[
               ElevatedButton.icon(
                 icon: const Icon(Icons.chat_bubble),
-                label: const Text('Iniciar Conversa'),
+                label: Text('userProfile_startChat'.tr()),
                 onPressed: () => _startChatWith(currentUserProfile, userProfile),
               ),
               const SizedBox(height: 16),
@@ -153,11 +169,11 @@ class _TelaPerfilUsuarioState extends State<TelaPerfilUsuario> with SingleTicker
                 ? ElevatedButton(
                     onPressed: () => _profileService.unfollowUser(currentUserProfile.id, userProfile.id),
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-                    child: const Text('Deixar de Seguir'),
+                    child: Text('userProfile_unfollow'.tr()),
                   )
                 : ElevatedButton(
                     onPressed: () => _profileService.followUser(currentUserProfile.id, userProfile.id),
-                    child: const Text('Seguir'),
+                    child: Text('userProfile_follow'.tr()),
                   ),
           ],
         ),

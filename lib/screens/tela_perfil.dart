@@ -354,7 +354,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
                                   ),
                                 if (userProfile.subscriptionStatus == SubscriptionStatus.free)
                                   ListTile(
-                                    leading: const Icon(Icons.ads_click, color: Colors.grey),
+                                    leading: const Icon(Icons.ads_click),
                                     title: Text('profile_premiumComingSoon'.tr()),
                                     subtitle: Text('profile_premiumSubtitle'.tr()),
                                     onTap: _isProcessingPayment ? null : () => _initiateCheckout('price_1SEHJXQmCOX7rhgSog6j9j4F'),
@@ -368,7 +368,8 @@ class _TelaPerfilState extends State<TelaPerfil> {
                       ],
                     ),
                     const SizedBox(height: 24),
-
+                    
+                    // ## INÍCIO DO CÓDIGO RESTAURADO ##
                     ListTile(
                       leading: const Icon(Icons.military_tech_outlined, color: Colors.amberAccent),
                       title: Text('profile_rewards'.tr()),
@@ -462,6 +463,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
                         ));
                       },
                     ),
+                    // ## FIM DO CÓDIGO RESTAURADO ##
                   ],
                 ),
               ),

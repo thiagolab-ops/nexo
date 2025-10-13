@@ -201,7 +201,7 @@ class HubEvent {
   final String creatorUsername;
   final String? meetLink;
   final String? audience;
-  final List<String> attendees; 
+  final List<String> attendees;
 
   HubEvent({
     required this.id,
@@ -211,7 +211,7 @@ class HubEvent {
     required this.creatorUsername,
     this.meetLink,
     this.audience,
-    this.attendees = const [], 
+    this.attendees = const [],
   });
 
   factory HubEvent.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc, [SnapshotOptions? options]) {
@@ -224,7 +224,7 @@ class HubEvent {
       creatorUsername: data['creatorUsername'] ?? '',
       meetLink: data['meetLink'],
       audience: data['audience'],
-      attendees: List<String>.from(data['attendees'] ?? []), 
+      attendees: List<String>.from(data['attendees'] ?? []),
     );
   }
 
@@ -236,7 +236,7 @@ class HubEvent {
       'creatorUsername': creatorUsername,
       'meetLink': meetLink,
       'audience': audience,
-      'attendees': attendees, 
+      'attendees': attendees,
     };
   }
 }
@@ -266,6 +266,8 @@ class UserModel {
   final Timestamp? subscriptionEndDate;
   final int inviteCount;
   final String? referredBy;
+  final bool hasFounderReward; // <--- NOVO CAMPO ADICIONADO
+  final List<String> badges; // <--- NOVO CAMPO ADICIONADO
 
   bool get isPrivileged => role == 'professor' || role == 'super_admin';
 
@@ -292,6 +294,8 @@ class UserModel {
     this.subscriptionEndDate,
     this.inviteCount = 0,
     this.referredBy,
+    this.hasFounderReward = false, // <--- INICIALIZAÇÃO
+    this.badges = const [], // <--- INICIALIZAÇÃO
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) {
@@ -319,6 +323,8 @@ class UserModel {
       subscriptionEndDate: data['subscriptionEndDate'],
       inviteCount: data['inviteCount'] ?? 0,
       referredBy: data['referredBy'] as String?,
+      hasFounderReward: data['hasFounderReward'] ?? false, // <--- LENDO DO FIRESTORE
+      badges: List<String>.from(data['badges'] ?? []), // <--- LENDO DO FIRESTORE
     );
   }
 
@@ -339,17 +345,19 @@ class UserModel {
       'subscriptionEndDate': subscriptionEndDate,
       'inviteCount': inviteCount,
       'referredBy': referredBy,
+      'hasFounderReward': hasFounderReward, // <--- SALVANDO NO FIRESTORE
+      'badges': badges, // <--- SALVANDO NO FIRESTORE
     };
   }
 }
 
-class Baralho { 
+class Baralho {
   final String id;
-  String nome; 
-  String? descricao; 
+  String nome;
+  String? descricao;
   String? ownerId;
   
-  Baralho({ required this.id, required this.nome, this.descricao, this.ownerId }); 
+  Baralho({ required this.id, required this.nome, this.descricao, this.ownerId });
 
   Map<String, dynamic> toMap() {
     return {
@@ -371,309 +379,309 @@ class Baralho {
   }
 }
 
-class Cartao { 
+class Cartao {
   final String id;
-  String baralhoId; 
-  String frente; 
-  String verso; 
-  DateTime proximaRevisao; 
-  int intervalo; 
-  double easeFactor; 
-  int repeticoes; 
-  Cartao({ 
+  String baralhoId;
+  String frente;
+  String verso;
+  DateTime proximaRevisao;
+  int intervalo;
+  double easeFactor;
+  int repeticoes;
+  Cartao({
     required this.id,
-    required this.baralhoId, 
-    required this.frente, 
-    required this.verso, 
-    DateTime? proximaRevisao, 
-    this.intervalo = 0, 
-    this.easeFactor = 2.5, 
-    this.repeticoes = 0, 
-  }) : proximaRevisao = proximaRevisao ?? DateTime.now(); 
+    required this.baralhoId,
+    required this.frente,
+    required this.verso,
+    DateTime? proximaRevisao,
+    this.intervalo = 0,
+    this.easeFactor = 2.5,
+    this.repeticoes = 0,
+  }) : proximaRevisao = proximaRevisao ?? DateTime.now();
   
-  Map<String, dynamic> toMap() { 
-    return { 
+  Map<String, dynamic> toMap() {
+    return {
       'id': id, // <<< --- A CORREÇÃO ESTÁ AQUI ---
-      'baralho_id': baralhoId, 
-      'frente': frente, 
-      'verso': verso, 
-      'proximaRevisao': Timestamp.fromDate(proximaRevisao), 
-      'intervalo': intervalo, 
-      'easeFactor': easeFactor, 
-      'repeticoes': repeticoes, 
-    }; 
-  } 
+      'baralho_id': baralhoId,
+      'frente': frente,
+      'verso': verso,
+      'proximaRevisao': Timestamp.fromDate(proximaRevisao),
+      'intervalo': intervalo,
+      'easeFactor': easeFactor,
+      'repeticoes': repeticoes,
+    };
+  }
   
-  factory Cartao.fromMap(Map<String, dynamic> map) { 
-    return Cartao( 
+  factory Cartao.fromMap(Map<String, dynamic> map) {
+    return Cartao(
       id: map['id'] as String,
-      baralhoId: map['baralho_id'] ?? '', 
+      baralhoId: map['baralho_id'] ?? '',
       frente: map['frente'] ?? '',
       verso: map['verso'] ?? '',
       proximaRevisao: (map['proximaRevisao'] as Timestamp?)?.toDate() ?? Timestamp.now().toDate(),
       intervalo: map['intervalo'] as int? ?? 0,
       easeFactor: (map['easeFactor'] as num?)?.toDouble() ?? 2.5,
       repeticoes: map['repeticoes'] as int? ?? 0,
-    ); 
-  } 
+    );
+  }
 }
 
-class NexoHub { 
-  final String id; 
-  final String name; 
-  final String description; 
-  final String ownerId; 
-  final List<String> memberIds; 
-  final Timestamp createdAt; 
-  NexoHub({ required this.id, required this.name, required this.description, required this.ownerId, required this.memberIds, required this.createdAt, }); 
-  
-  factory NexoHub.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) { 
-    final data = snapshot.data()!; 
-    return NexoHub( 
-      id: snapshot.id, 
-      name: data['name'] ?? '', 
-      description: data['description'] ?? '', 
-      ownerId: data['ownerId'] ?? '', 
-      memberIds: List<String>.from(data['memberIds'] ?? []), 
-      createdAt: data['createdAt'] ?? Timestamp.now(), 
-    ); 
-  } 
-  
-  Map<String, dynamic> toMap() { 
-    return { 
-      'name': name, 
-      'description': description, 
-      'ownerId': ownerId, 
-      'memberIds': memberIds, 
-      'createdAt': createdAt, 
-    }; 
-  } 
-}
-
-class NexoPadDocument { 
+class NexoHub {
   final String id;
-  String title; 
-  final String ownerId; 
-  String contentJson; 
+  final String name;
+  final String description;
+  final String ownerId;
+  final List<String> memberIds;
+  final Timestamp createdAt;
+  NexoHub({ required this.id, required this.name, required this.description, required this.ownerId, required this.memberIds, required this.createdAt, });
+  
+  factory NexoHub.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) {
+    final data = snapshot.data()!;
+    return NexoHub(
+      id: snapshot.id,
+      name: data['name'] ?? '',
+      description: data['description'] ?? '',
+      ownerId: data['ownerId'] ?? '',
+      memberIds: List<String>.from(data['memberIds'] ?? []),
+      createdAt: data['createdAt'] ?? Timestamp.now(),
+    );
+  }
+  
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'description': description,
+      'ownerId': ownerId,
+      'memberIds': memberIds,
+      'createdAt': createdAt,
+    };
+  }
+}
+
+class NexoPadDocument {
+  final String id;
+  String title;
+  final String ownerId;
+  String contentJson;
   final Timestamp createdAt;
   Timestamp lastEdited;
-  final String? hubId; 
+  final String? hubId;
   String? lastEditorId;
   String? lastEditorUsername;
   
-  NexoPadDocument({ 
-    required this.id, 
-    required this.title, 
-    required this.ownerId, 
-    required this.contentJson, 
-    required this.createdAt, 
-    required this.lastEdited, 
-    this.hubId, 
-    this.lastEditorId, 
-    this.lastEditorUsername, 
-  }); 
+  NexoPadDocument({
+    required this.id,
+    required this.title,
+    required this.ownerId,
+    required this.contentJson,
+    required this.createdAt,
+    required this.lastEdited,
+    this.hubId,
+    this.lastEditorId,
+    this.lastEditorUsername,
+  });
   
-  factory NexoPadDocument.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) { 
-    final data = snapshot.data()!; 
+  factory NexoPadDocument.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) {
+    final data = snapshot.data()!;
     return NexoPadDocument(
-      id: snapshot.id, 
-      title: data['title'] ?? 'Sem Título', 
-      ownerId: data['ownerId'] ?? '', 
-      contentJson: data['contentJson'] ?? '[{"insert":"\\n"}]', 
+      id: snapshot.id,
+      title: data['title'] ?? 'Sem Título',
+      ownerId: data['ownerId'] ?? '',
+      contentJson: data['contentJson'] ?? '[{"insert":"\\n"}]',
       createdAt: data['createdAt'] ?? Timestamp.now(),
-      lastEdited: data['lastEdited'] ?? Timestamp.now(), 
-      hubId: data['hubId'], 
-      lastEditorId: data['lastEditorId'], 
-      lastEditorUsername: data['lastEditorUsername'], 
-    ); 
-  } 
+      lastEdited: data['lastEdited'] ?? Timestamp.now(),
+      hubId: data['hubId'],
+      lastEditorId: data['lastEditorId'],
+      lastEditorUsername: data['lastEditorUsername'],
+    );
+  }
   
-  Map<String, dynamic> toMap() { 
-    return { 
-      'title': title, 
-      'ownerId': ownerId, 
-      'contentJson': contentJson, 
+  Map<String, dynamic> toMap() {
+    return {
+      'title': title,
+      'ownerId': ownerId,
+      'contentJson': contentJson,
       'createdAt': createdAt,
-      'lastEdited': lastEdited, 
-      'lastEditorId': lastEditorId, 
+      'lastEdited': lastEdited,
+      'lastEditorId': lastEditorId,
       'lastEditorUsername': lastEditorUsername,
       'hubId': hubId,
-    }; 
-  } 
+    };
+  }
 }
 
 enum ChatRoomType { dm, group }
 
-class ChatRoom { 
-  final String id; 
-  final ChatRoomType type; 
-  final List<String> memberIds; 
-  final String? hubId; 
-  final Map<String, String> memberInfo; 
-  final String lastMessage; 
-  final Timestamp lastMessageTimestamp; 
+class ChatRoom {
+  final String id;
+  final ChatRoomType type;
+  final List<String> memberIds;
+  final String? hubId;
+  final Map<String, String> memberInfo;
+  final String lastMessage;
+  final Timestamp lastMessageTimestamp;
   final Timestamp createdAt;
   
-  ChatRoom({ 
-    required this.id, 
-    required this.type, 
-    required this.memberIds, 
-    this.hubId, 
-    this.memberInfo = const {}, 
-    this.lastMessage = '', 
-    required this.lastMessageTimestamp, 
+  ChatRoom({
+    required this.id,
+    required this.type,
+    required this.memberIds,
+    this.hubId,
+    this.memberInfo = const {},
+    this.lastMessage = '',
+    required this.lastMessageTimestamp,
     required this.createdAt,
-  }); 
+  });
   
-  factory ChatRoom.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) { 
-    final data = snapshot.data()!; 
-    return ChatRoom( 
-      id: snapshot.id, 
-      type: ChatRoomType.values.byName(data['type'] ?? 'dm'), 
-      memberIds: List<String>.from(data['memberIds'] ?? []), 
-      hubId: data['hubId'], 
-      memberInfo: Map<String, String>.from(data['memberInfo'] ?? {}), 
-      lastMessage: data['lastMessage'] ?? '', 
-      lastMessageTimestamp: data['lastMessageTimestamp'] ?? Timestamp.now(), 
+  factory ChatRoom.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) {
+    final data = snapshot.data()!;
+    return ChatRoom(
+      id: snapshot.id,
+      type: ChatRoomType.values.byName(data['type'] ?? 'dm'),
+      memberIds: List<String>.from(data['memberIds'] ?? []),
+      hubId: data['hubId'],
+      memberInfo: Map<String, String>.from(data['memberInfo'] ?? {}),
+      lastMessage: data['lastMessage'] ?? '',
+      lastMessageTimestamp: data['lastMessageTimestamp'] ?? Timestamp.now(),
       createdAt: data['createdAt'] ?? Timestamp.now(),
-    ); 
-  } 
+    );
+  }
   
-  Map<String, dynamic> toMap() { 
-    return { 
-      'type': type.name, 
-      'memberIds': memberIds, 
-      'hubId': hubId, 
-      'memberInfo': memberInfo, 
-      'lastMessage': lastMessage, 
-      'lastMessageTimestamp': lastMessageTimestamp, 
+  Map<String, dynamic> toMap() {
+    return {
+      'type': type.name,
+      'memberIds': memberIds,
+      'hubId': hubId,
+      'memberInfo': memberInfo,
+      'lastMessage': lastMessage,
+      'lastMessageTimestamp': lastMessageTimestamp,
       'createdAt': createdAt,
-    }; 
-  } 
+    };
+  }
 }
 
-class ChatMessage { 
-  final String id; 
-  final String senderId; 
-  final String text; 
-  final Timestamp timestamp; 
+class ChatMessage {
+  final String id;
+  final String senderId;
+  final String text;
+  final Timestamp timestamp;
   
-  ChatMessage({ 
-    required this.id, 
-    required this.senderId, 
-    required this.text, 
-    required this.timestamp, 
-  }); 
+  ChatMessage({
+    required this.id,
+    required this.senderId,
+    required this.text,
+    required this.timestamp,
+  });
   
-  factory ChatMessage.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) { 
-    final data = snapshot.data()!; 
-    return ChatMessage( 
-      id: snapshot.id, 
-      senderId: data['senderId'] ?? '', 
-      text: data['text'] ?? '', 
-      timestamp: data['timestamp'] ?? Timestamp.now(), 
-    ); 
-  } 
+  factory ChatMessage.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) {
+    final data = snapshot.data()!;
+    return ChatMessage(
+      id: snapshot.id,
+      senderId: data['senderId'] ?? '',
+      text: data['text'] ?? '',
+      timestamp: data['timestamp'] ?? Timestamp.now(),
+    );
+  }
 }
 
-class Quiz { 
-  final String id; 
-  final String title; 
-  final String ownerId; 
-  final String sourceDeckId; 
-  final List<QuizQuestion> questions; 
-  final Timestamp createdAt; 
+class Quiz {
+  final String id;
+  final String title;
+  final String ownerId;
+  final String sourceDeckId;
+  final List<QuizQuestion> questions;
+  final Timestamp createdAt;
   
-  Quiz({ 
-    required this.id, 
-    required this.title, 
-    required this.ownerId, 
-    required this.sourceDeckId, 
-    required this.questions, 
-    required this.createdAt, 
-  }); 
+  Quiz({
+    required this.id,
+    required this.title,
+    required this.ownerId,
+    required this.sourceDeckId,
+    required this.questions,
+    required this.createdAt,
+  });
   
-  Map<String, dynamic> toMap() { 
-    return { 
-      'title': title, 
-      'ownerId': ownerId, 
-      'sourceDeckId': sourceDeckId, 
-      'questions': questions.map((q) => q.toMap()).toList(), 
-      'createdAt': createdAt, 
-    }; 
-  } 
+  Map<String, dynamic> toMap() {
+    return {
+      'title': title,
+      'ownerId': ownerId,
+      'sourceDeckId': sourceDeckId,
+      'questions': questions.map((q) => q.toMap()).toList(),
+      'createdAt': createdAt,
+    };
+  }
   
-  factory Quiz.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) { 
-    final data = snapshot.data()!; 
-    return Quiz( 
-      id: snapshot.id, 
-      title: data['title'] ?? '', 
-      ownerId: data['ownerId'] ?? '', 
-      sourceDeckId: data['sourceDeckId'] ?? '', 
-      questions: (data['questions'] as List).map((q) => QuizQuestion.fromMap(q)).toList(), 
-      createdAt: data['createdAt'] ?? Timestamp.now(), 
-    ); 
-  } 
+  factory Quiz.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) {
+    final data = snapshot.data()!;
+    return Quiz(
+      id: snapshot.id,
+      title: data['title'] ?? '',
+      ownerId: data['ownerId'] ?? '',
+      sourceDeckId: data['sourceDeckId'] ?? '',
+      questions: (data['questions'] as List).map((q) => QuizQuestion.fromMap(q)).toList(),
+      createdAt: data['createdAt'] ?? Timestamp.now(),
+    );
+  }
 }
 
-class QuizQuestion { 
-  final String questionText; 
-  final String correctAnswer; 
-  final List<String> options; 
-  final String id; 
+class QuizQuestion {
+  final String questionText;
+  final String correctAnswer;
+  final List<String> options;
+  final String id;
   
-  QuizQuestion({ 
-    required this.questionText, 
-    required this.correctAnswer, 
-    required this.options, 
-    required this.id 
-  }); 
+  QuizQuestion({
+    required this.questionText,
+    required this.correctAnswer,
+    required this.options,
+    required this.id
+  });
   
-  Map<String, dynamic> toMap() { 
-    return { 
-      'questionText': questionText, 
-      'correctAnswer': correctAnswer, 
-      'options': options, 
-      'id': id 
-    }; 
-  } 
+  Map<String, dynamic> toMap() {
+    return {
+      'questionText': questionText,
+      'correctAnswer': correctAnswer,
+      'options': options,
+      'id': id
+    };
+  }
   
-  factory QuizQuestion.fromMap(Map<String, dynamic> map) { 
-    return QuizQuestion( 
-      questionText: map['questionText'] ?? '', 
-      correctAnswer: map['correctAnswer'] ?? '', 
-      options: List<String>.from(map['options'] ?? []), 
-      id: map['id'] ?? '', 
-    ); 
-  } 
+  factory QuizQuestion.fromMap(Map<String, dynamic> map) {
+    return QuizQuestion(
+      questionText: map['questionText'] ?? '',
+      correctAnswer: map['correctAnswer'] ?? '',
+      options: List<String>.from(map['options'] ?? []),
+      id: map['id'] ?? '',
+    );
+  }
 }
 
-class AgendaEvent { 
-  final String id; 
-  final String title; 
-  final DateTime date; 
-  bool isDone; 
+class AgendaEvent {
+  final String id;
+  final String title;
+  final DateTime date;
+  bool isDone;
   
-  AgendaEvent({ 
-    required this.id, 
-    required this.title, 
-    required this.date, 
-    this.isDone = false 
-  }); 
+  AgendaEvent({
+    required this.id,
+    required this.title,
+    required this.date,
+    this.isDone = false
+  });
   
-  factory AgendaEvent.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) { 
-    final data = snapshot.data()!; 
-    return AgendaEvent( 
-      id: snapshot.id, 
-      title: data['title'] ?? '', 
-      date: (data['date'] as Timestamp).toDate(), 
-      isDone: data['isDone'] ?? false, 
-    ); 
-  } 
+  factory AgendaEvent.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) {
+    final data = snapshot.data()!;
+    return AgendaEvent(
+      id: snapshot.id,
+      title: data['title'] ?? '',
+      date: (data['date'] as Timestamp).toDate(),
+      isDone: data['isDone'] ?? false,
+    );
+  }
   
-  Map<String, dynamic> toMap() { 
-    return { 'title': title, 'date': Timestamp.fromDate(date), 'isDone': isDone }; 
-  } 
+  Map<String, dynamic> toMap() {
+    return { 'title': title, 'date': Timestamp.fromDate(date), 'isDone': isDone };
+  }
 }
 
 class VideoNexo { // (Arquivo)
@@ -805,7 +813,7 @@ class Lesson {
   String videoUrl;
   int orderIndex;
   final Timestamp createdAt;
-  bool completed; 
+  bool completed;
 
   Lesson({
     required this.id,
@@ -813,7 +821,7 @@ class Lesson {
     required this.videoUrl,
     required this.orderIndex,
     required this.createdAt,
-    this.completed = false, 
+    this.completed = false,
   });
   
   String get thumbnailUrl {
@@ -835,7 +843,7 @@ class Lesson {
     } catch (e) {
       print('Erro ao extrair thumbnail: $e');
     }
-    return ''; 
+    return '';
   }
 
   Map<String, dynamic> toMap() {
@@ -878,7 +886,7 @@ class LessonComment {
     required this.createdAt,
   });
 
-   Map<String, dynamic> toMap() {
+    Map<String, dynamic> toMap() {
     return {
       'authorId': authorId,
       'authorUsername': authorUsername,
