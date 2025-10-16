@@ -1,9 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:nexo/models/models.dart';
 import 'package:nexo/screens/tela_curso_player.dart';
 import 'package:nexo/screens/tela_video_player_generica.dart';
-import 'package:nexo/services/firestore_service.dart';
-import 'package:provider/provider.dart';
 
 class TelaNexoGoPublica extends StatefulWidget {
   final UserModel profUser;
@@ -15,13 +15,11 @@ class TelaNexoGoPublica extends StatefulWidget {
 
 class _TelaNexoGoPublicaState extends State<TelaNexoGoPublica> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  late final FirestoreService _firestoreService;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _firestoreService = context.read<FirestoreService>();
   }
   
   @override
@@ -36,9 +34,9 @@ class _TelaNexoGoPublicaState extends State<TelaNexoGoPublica> with SingleTicker
       children: [
         TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.school_outlined), text: 'CURSOS'),
-            Tab(icon: Icon(Icons.video_collection_outlined), text: 'VÍDEOS'), // <<< NOME ATUALIZADO
+          tabs: [
+            Tab(icon: const Icon(Icons.school_outlined), text: 'daxugo_coursesPublicTab'.tr()),
+            Tab(icon: const Icon(Icons.video_collection_outlined), text: 'daxugo_videosPublicTab'.tr()),
           ],
         ),
         Expanded(
@@ -56,10 +54,16 @@ class _TelaNexoGoPublicaState extends State<TelaNexoGoPublica> with SingleTicker
 
   Widget _buildCursosList(BuildContext context) {
     return StreamBuilder<List<Curso>>(
-      stream: _firestoreService.streamCursos(widget.profUser.id),
+      stream: FirebaseFirestore.instance
+          .collection('public_courses')
+          .where('ownerId', isEqualTo: widget.profUser.id)
+          .orderBy('createdAt', descending: true)
+          .snapshots()
+          .map((snapshot) => snapshot.docs.map((doc) => Curso.fromFirestore(doc)).toList()),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('Este professor ainda não publicou cursos.'));
+        if (snapshot.hasError) return Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text('Erro ao carregar cursos: ${snapshot.error}')));
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return Center(child: Text('daxugo_noCoursesPublic'.tr()));
         
         final cursos = snapshot.data!;
         return ListView.builder(
@@ -94,10 +98,16 @@ class _TelaNexoGoPublicaState extends State<TelaNexoGoPublica> with SingleTicker
 
   Widget _buildArquivosList(BuildContext context) {
     return StreamBuilder<List<VideoNexo>>(
-      stream: _firestoreService.streamVideos(widget.profUser.id),
+      stream: FirebaseFirestore.instance
+          .collection('public_videos')
+          .where('ownerId', isEqualTo: widget.profUser.id)
+          .orderBy('createdAt', descending: true)
+          .snapshots()
+          .map((snapshot) => snapshot.docs.map((doc) => VideoNexo.fromFirestore(doc)).toList()),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('Nenhum vídeo no arquivo.'));
+        if (snapshot.hasError) return Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text('Erro ao carregar vídeos: ${snapshot.error}')));
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return Center(child: Text('daxugo_noVideosPublic'.tr()));
         
         final videos = snapshot.data!;
         return ListView.builder(

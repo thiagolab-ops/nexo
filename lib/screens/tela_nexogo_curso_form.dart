@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:nexo/models/models.dart';
@@ -40,24 +41,27 @@ class _TelaNexoGoCursoFormState extends State<TelaNexoGoCursoForm> {
 
       if (_isEditing) {
         final updatedCurso = widget.cursoToEdit!;
-        updatedCurso.title = _titleController.text;
-        updatedCurso.description = _descriptionController.text;
+        updatedCurso.title = _titleController.text.trim();
+        updatedCurso.description = _descriptionController.text.trim();
         
+        // Atualiza na coleção privada
         await _firestoreService.updateCurso(userId, updatedCurso);
+        // Atualiza a cópia pública
+        await FirebaseFirestore.instance.collection('public_courses').doc(updatedCurso.id).set(updatedCurso.toMap());
       } else {
-        final newCurso = Curso(
-          id: '', // será gerado
+        // Cria na coleção privada e obtém o curso com o ID
+        final newCurso = await _firestoreService.createCursoFromForm(
           ownerId: userId,
-          title: _titleController.text,
-          description: _descriptionController.text,
-          createdAt: Timestamp.now(),
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim(),
         );
-        await _firestoreService.createCurso(newCurso);
+        // Cria a cópia pública com o mesmo ID
+        await FirebaseFirestore.instance.collection('public_courses').doc(newCurso.id).set(newCurso.toMap());
       }
 
       if (mounted) {
          ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(content: Text('Curso salvo com sucesso!'), backgroundColor: Colors.green),
+           SnackBar(content: Text('daxugo_saveSuccess'.tr()), backgroundColor: Colors.green),
          );
          Navigator.of(context).pop();
       }
@@ -65,7 +69,7 @@ class _TelaNexoGoCursoFormState extends State<TelaNexoGoCursoForm> {
        setState(() => _isLoading = false);
        if (mounted) {
          ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(content: Text('Erro ao salvar: $e'), backgroundColor: Colors.red),
+           SnackBar(content: Text('daxugo_saveError'.tr(namedArgs: {'error': e.toString()})), backgroundColor: Colors.red),
          );
        }
     }
@@ -75,7 +79,7 @@ class _TelaNexoGoCursoFormState extends State<TelaNexoGoCursoForm> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditing ? 'Editar Curso' : 'Criar Novo Curso'),
+        title: Text(_isEditing ? 'daxugo_editCourse'.tr() : 'daxugo_createCourse'.tr()),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
@@ -86,15 +90,15 @@ class _TelaNexoGoCursoFormState extends State<TelaNexoGoCursoForm> {
             children: [
               TextFormField(
                 controller: _titleController,
-                decoration: const InputDecoration(labelText: 'Título do Curso'),
-                validator: (val) => val!.isEmpty ? 'Campo obrigatório' : null,
+                decoration: InputDecoration(labelText: 'daxugo_courseTitle'.tr()),
+                validator: (val) => val!.trim().isEmpty ? 'daxugo_requiredField'.tr() : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _descriptionController,
-                decoration: const InputDecoration(labelText: 'Descrição do Curso'),
+                decoration: InputDecoration(labelText: 'daxugo_courseDescription'.tr()),
                 maxLines: 5,
-                 validator: (val) => val!.isEmpty ? 'Campo obrigatório' : null,
+                validator: (val) => val!.trim().isEmpty ? 'daxugo_requiredField'.tr() : null,
               ),
               const SizedBox(height: 32),
               if (_isLoading)
@@ -103,7 +107,7 @@ class _TelaNexoGoCursoFormState extends State<TelaNexoGoCursoForm> {
                 ElevatedButton(
                   onPressed: _saveCurso,
                   style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                  child: Text('SALVAR CURSO'),
+                  child: Text('daxugo_saveCourseButton'.tr()),
                 ),
             ],
           ),

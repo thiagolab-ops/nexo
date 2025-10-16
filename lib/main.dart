@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:nexo/nexo_theme.dart';
 import 'package:nexo/screens/tela_baralhos_lista.dart';
@@ -24,8 +25,6 @@ import 'package:nexo/services/report_service.dart';
 import 'package:nexo/services/theme_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:nexo/screens/tela_feed.dart';
-import 'package:webview_flutter_web/webview_flutter_web.dart';
-import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
 import 'dart:io' show Platform;
 
 import 'auth_gate.dart';
@@ -41,27 +40,18 @@ import 'screens/tela_social_nova.dart';
 import 'screens/tela_nexo_pad.dart';
 import 'widgets/user_avatar.dart';
 
-// Constante para ligar/desligar o uso dos emuladores
 const bool USE_EMULATOR = true;
 
 Future<void> _connectToEmulators() async {
   final String host = kIsWeb ? 'localhost' : Platform.isAndroid ? '10.0.2.2' : 'localhost';
-
   try {
     print('--- USANDO EMULADORES LOCAIS ---');
-    
-    // Conecta ao emulador do Firestore
     FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
     print('[OK] Firestore Emulator -> $host:8080');
-
-    // Conecta ao emulador do Functions
     FirebaseFunctions.instanceFor(region: 'us-central1').useFunctionsEmulator(host, 5001);
     print('[OK] Functions Emulator -> $host:5001');
-
-    // Conecta ao emulador do Authentication
     await FirebaseAuth.instance.useAuthEmulator(host, 9099);
     print('[OK] Auth Emulator -> $host:9099');
-    
     print('--- CONEXÃO COM EMULADORES ESTABELECIDA ---');
   } catch (e) {
     print('!!! ERRO AO CONECTAR AOS EMULADORES: $e');
@@ -71,9 +61,14 @@ Future<void> _connectToEmulators() async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  if (kIsWeb) {
-    WebViewPlatform.instance = WebWebViewPlatform();
-  }
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
+
+  // A inicialização específica do webview_flutter foi removida daqui
   
   await EasyLocalization.ensureInitialized();
   await Firebase.initializeApp(
@@ -97,6 +92,8 @@ void main() async {
     ),
   );
 }
+
+// O resto do arquivo main.dart permanece o mesmo...
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -137,7 +134,6 @@ class MyApp extends StatelessWidget {
                   darkTheme: NexoTheme.dark,
                   themeMode: themeProvider.themeMode,
                   debugShowCheckedModeBanner: false,
-                  // ## AQUI ESTÁ A MUDANÇA: 'home' foi trocado por 'initialRoute' e 'routes' ##
                   initialRoute: '/',
                   routes: {
                     '/': (context) => const AuthGate(),

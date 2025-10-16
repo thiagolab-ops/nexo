@@ -1,10 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:nexo/models/models.dart';
 import 'package:nexo/services/firestore_service.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:uuid/uuid.dart';
 
 class TelaNexoGoArquivoForm extends StatefulWidget {
   final VideoNexo? videoToEdit;
@@ -21,15 +21,14 @@ class _TelaNexoGoArquivoFormState extends State<TelaNexoGoArquivoForm> {
   late final TextEditingController _descriptionController;
   late final TextEditingController _videoUrlController;
   bool _isSaving = false;
-  final Uuid _uuid = Uuid();
 
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.videoToEdit?.title);
-    _subjectController = TextEditingController(text: widget.videoToEdit?.subject);
-    _descriptionController = TextEditingController(text: widget.videoToEdit?.description);
-    _videoUrlController = TextEditingController(text: widget.videoToEdit?.videoUrl);
+    _titleController = TextEditingController(text: widget.videoToEdit?.title ?? '');
+    _subjectController = TextEditingController(text: widget.videoToEdit?.subject ?? '');
+    _descriptionController = TextEditingController(text: widget.videoToEdit?.description ?? '');
+    _videoUrlController = TextEditingController(text: widget.videoToEdit?.videoUrl ?? '');
   }
 
   Future<void> _saveVideo() async {
@@ -41,31 +40,35 @@ class _TelaNexoGoArquivoFormState extends State<TelaNexoGoArquivoForm> {
 
     try {
       if (widget.videoToEdit != null) {
+        // Editando um vídeo existente
         final updatedVideo = VideoNexo(
           id: widget.videoToEdit!.id,
           ownerId: userId,
-          title: _titleController.text,
-          subject: _subjectController.text,
-          description: _descriptionController.text,
-          videoUrl: _videoUrlController.text,
+          title: _titleController.text.trim(),
+          subject: _subjectController.text.trim(),
+          description: _descriptionController.text.trim(),
+          videoUrl: _videoUrlController.text.trim(),
           createdAt: widget.videoToEdit!.createdAt,
         );
+        // Atualiza na coleção privada
         await firestoreService.updateVideo(updatedVideo);
+        // Atualiza a cópia pública
+        await FirebaseFirestore.instance.collection('public_videos').doc(updatedVideo.id).set(updatedVideo.toMap());
       } else {
-        final newVideo = VideoNexo(
-          id: _uuid.v4(),
+        // Criando um novo vídeo
+        final newVideo = await firestoreService.addVideoFromForm(
           ownerId: userId,
-          title: _titleController.text,
-          subject: _subjectController.text,
-          description: _descriptionController.text,
-          videoUrl: _videoUrlController.text,
-          createdAt: Timestamp.now(),
+          title: _titleController.text.trim(),
+          subject: _subjectController.text.trim(),
+          description: _descriptionController.text.trim(),
+          videoUrl: _videoUrlController.text.trim(),
         );
-        await firestoreService.addVideo(newVideo);
+        // Cria a cópia pública
+        await FirebaseFirestore.instance.collection('public_videos').doc(newVideo.id).set(newVideo.toMap());
       }
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      // Handle error
+      // Lidar com o erro
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -75,10 +78,10 @@ class _TelaNexoGoArquivoFormState extends State<TelaNexoGoArquivoForm> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.videoToEdit == null ? 'Adicionar Vídeo' : 'Editar Vídeo'),
+        title: Text(widget.videoToEdit == null ? 'daxugo_addVideo'.tr() : 'daxugo_editVideo'.tr()),
         actions: [
           if (_isSaving) const Center(child: Padding(padding: EdgeInsets.all(16.0), child: CircularProgressIndicator()))
-          else IconButton(icon: const Icon(Icons.save), onPressed: _saveVideo),
+          else IconButton(icon: const Icon(Icons.save), onPressed: _saveVideo, tooltip: 'saveButton'.tr()),
         ],
       ),
       body: SingleChildScrollView(
@@ -90,10 +93,28 @@ class _TelaNexoGoArquivoFormState extends State<TelaNexoGoArquivoForm> {
             children: [
               TextFormField(
                 controller: _titleController,
-                decoration: const InputDecoration(labelText: 'Título'),
-                validator: (val) => val!.isEmpty ? 'Campo obrigatório' : null,
+                decoration: InputDecoration(labelText: 'daxugo_videoTitle'.tr()),
+                validator: (val) => val!.trim().isEmpty ? 'daxugo_requiredField'.tr() : null,
               ),
-              // ... (resto do formulário)
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _subjectController,
+                decoration: InputDecoration(labelText: 'daxugo_videoSubject'.tr()),
+                validator: (val) => val!.trim().isEmpty ? 'daxugo_requiredField'.tr() : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _videoUrlController,
+                decoration: InputDecoration(labelText: 'daxugo_videoUrl'.tr()),
+                validator: (val) => val!.trim().isEmpty ? 'daxugo_requiredField'.tr() : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _descriptionController,
+                decoration: InputDecoration(labelText: 'daxugo_videoDescription'.tr()),
+                maxLines: 5,
+                validator: (val) => val!.trim().isEmpty ? 'daxugo_requiredField'.tr() : null,
+              ),
             ],
           ),
         ),

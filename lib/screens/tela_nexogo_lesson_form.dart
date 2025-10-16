@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:nexo/models/models.dart';
 import 'package:nexo/services/firestore_service.dart';
@@ -8,7 +9,7 @@ class TelaNexoGoLessonForm extends StatefulWidget {
   final String cursoId;
   final String ownerId;
   final Lesson? lessonToEdit;
-  final int currentLessonCount; // Precisamos disso para saber qual 'orderIndex' usar
+  final int currentLessonCount;
 
   const TelaNexoGoLessonForm({
     super.key, 
@@ -47,24 +48,35 @@ class _TelaNexoGoLessonFormState extends State<TelaNexoGoLessonForm> {
     try {
       if (_isEditing) {
         final updatedLesson = widget.lessonToEdit!;
-        updatedLesson.title = _titleController.text;
-        updatedLesson.videoUrl = _urlController.text;
+        updatedLesson.title = _titleController.text.trim();
+        updatedLesson.videoUrl = _urlController.text.trim();
         
         await _firestoreService.updateLesson(widget.ownerId, widget.cursoId, updatedLesson);
+        await FirebaseFirestore.instance.collection('public_courses').doc(widget.cursoId).collection('lessons').doc(updatedLesson.id).set(updatedLesson.toMap());
+
       } else {
-        final newLesson = Lesson(
+        final tempLesson = Lesson(
           id: '', // será gerado
-          title: _titleController.text,
-          videoUrl: _urlController.text,
-          orderIndex: widget.currentLessonCount, // Adiciona ao final da lista
+          title: _titleController.text.trim(),
+          videoUrl: _urlController.text.trim(),
+          orderIndex: widget.currentLessonCount,
           createdAt: Timestamp.now(),
         );
-        await _firestoreService.addLesson(widget.ownerId, widget.cursoId, newLesson);
+        final docRef = await _firestoreService.addLesson(widget.ownerId, widget.cursoId, tempLesson);
+        
+        final finalLesson = Lesson(
+          id: docRef.id,
+          title: tempLesson.title,
+          videoUrl: tempLesson.videoUrl,
+          orderIndex: tempLesson.orderIndex,
+          createdAt: tempLesson.createdAt,
+        );
+        await FirebaseFirestore.instance.collection('public_courses').doc(widget.cursoId).collection('lessons').doc(finalLesson.id).set(finalLesson.toMap());
       }
 
       if (mounted) {
          ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(content: Text('Aula salva com sucesso!'), backgroundColor: Colors.green),
+           SnackBar(content: Text('daxugo_saveLessonSuccess'.tr()), backgroundColor: Colors.green),
          );
          Navigator.of(context).pop();
       }
@@ -72,7 +84,7 @@ class _TelaNexoGoLessonFormState extends State<TelaNexoGoLessonForm> {
        setState(() => _isLoading = false);
        if (mounted) {
          ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(content: Text('Erro ao salvar aula: $e'), backgroundColor: Colors.red),
+           SnackBar(content: Text('daxugo_saveLessonError'.tr(namedArgs: {'error': e.toString()})), backgroundColor: Colors.red),
          );
        }
     }
@@ -82,7 +94,7 @@ class _TelaNexoGoLessonFormState extends State<TelaNexoGoLessonForm> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditing ? 'Editar Aula' : 'Nova Aula do Curso'),
+        title: Text(_isEditing ? 'daxugo_editLesson'.tr() : 'daxugo_newLesson'.tr()),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
@@ -93,14 +105,14 @@ class _TelaNexoGoLessonFormState extends State<TelaNexoGoLessonForm> {
             children: [
               TextFormField(
                 controller: _titleController,
-                decoration: const InputDecoration(labelText: 'Título da Aula'),
-                validator: (val) => val!.isEmpty ? 'Campo obrigatório' : null,
+                decoration: InputDecoration(labelText: 'daxugo_lessonTitle'.tr()),
+                validator: (val) => val!.trim().isEmpty ? 'daxugo_requiredField'.tr() : null,
               ),
               const SizedBox(height: 16),
-               TextFormField(
+              TextFormField(
                 controller: _urlController,
-                decoration: const InputDecoration(labelText: 'URL do Vídeo (YouTube ou Vimeo)'),
-                validator: (val) => val!.isEmpty ? 'URL é obrigatória' : null,
+                decoration: InputDecoration(labelText: 'daxugo_lessonUrl'.tr()),
+                validator: (val) => val!.trim().isEmpty ? 'daxugo_urlRequired'.tr() : null,
               ),
               const SizedBox(height: 32),
               if (_isLoading)
@@ -109,7 +121,7 @@ class _TelaNexoGoLessonFormState extends State<TelaNexoGoLessonForm> {
                 ElevatedButton(
                   onPressed: _saveLesson,
                   style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                  child: const Text('SALVAR AULA'),
+                  child: Text('daxugo_saveLessonButton'.tr()),
                 ),
             ],
           ),

@@ -266,8 +266,8 @@ class UserModel {
   final Timestamp? subscriptionEndDate;
   final int inviteCount;
   final String? referredBy;
-  final bool hasFounderReward; // <--- NOVO CAMPO ADICIONADO
-  final List<String> badges; // <--- NOVO CAMPO ADICIONADO
+  final bool hasFounderReward;
+  final List<String> badges;
 
   bool get isPrivileged => role == 'professor' || role == 'super_admin';
 
@@ -294,8 +294,8 @@ class UserModel {
     this.subscriptionEndDate,
     this.inviteCount = 0,
     this.referredBy,
-    this.hasFounderReward = false, // <--- INICIALIZAÇÃO
-    this.badges = const [], // <--- INICIALIZAÇÃO
+    this.hasFounderReward = false,
+    this.badges = const [],
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) {
@@ -323,8 +323,8 @@ class UserModel {
       subscriptionEndDate: data['subscriptionEndDate'],
       inviteCount: data['inviteCount'] ?? 0,
       referredBy: data['referredBy'] as String?,
-      hasFounderReward: data['hasFounderReward'] ?? false, // <--- LENDO DO FIRESTORE
-      badges: List<String>.from(data['badges'] ?? []), // <--- LENDO DO FIRESTORE
+      hasFounderReward: data['hasFounderReward'] ?? false,
+      badges: List<String>.from(data['badges'] ?? []),
     );
   }
 
@@ -345,8 +345,8 @@ class UserModel {
       'subscriptionEndDate': subscriptionEndDate,
       'inviteCount': inviteCount,
       'referredBy': referredBy,
-      'hasFounderReward': hasFounderReward, // <--- SALVANDO NO FIRESTORE
-      'badges': badges, // <--- SALVANDO NO FIRESTORE
+      'hasFounderReward': hasFounderReward,
+      'badges': badges,
     };
   }
 }
@@ -433,7 +433,17 @@ class NexoHub {
   final String ownerId;
   final List<String> memberIds;
   final Timestamp createdAt;
-  NexoHub({ required this.id, required this.name, required this.description, required this.ownerId, required this.memberIds, required this.createdAt, });
+  final List<String> linkedCourseIds; // <-- NOVO CAMPO: IDs dos cursos vinculados
+
+  NexoHub({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.ownerId,
+    required this.memberIds,
+    required this.createdAt,
+    this.linkedCourseIds = const [], // Inicialização padrão
+  });
   
   factory NexoHub.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot, [SnapshotOptions? options]) {
     final data = snapshot.data()!;
@@ -444,6 +454,7 @@ class NexoHub {
       ownerId: data['ownerId'] ?? '',
       memberIds: List<String>.from(data['memberIds'] ?? []),
       createdAt: data['createdAt'] ?? Timestamp.now(),
+      linkedCourseIds: List<String>.from(data['linkedCourseIds'] ?? []), // Lendo do Firestore
     );
   }
   
@@ -454,6 +465,7 @@ class NexoHub {
       'ownerId': ownerId,
       'memberIds': memberIds,
       'createdAt': createdAt,
+      'linkedCourseIds': linkedCourseIds, // Salvando no Firestore
     };
   }
 }

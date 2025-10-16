@@ -5,7 +5,7 @@ import '../models/models.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final Uuid _uuid = Uuid();
+  final Uuid _uuid = const Uuid();
   
   String get _userId {
     final user = FirebaseAuth.instance.currentUser;
@@ -47,10 +47,7 @@ class FirestoreService {
     });
 
     for (final cardMap in cardsData) {
-      // CORREÇÃO LÓGICA:
-      // 1. Cria a referência do documento PRIMEIRO para obter um ID.
       final newCardRef = newDeckRef.collection('cards').doc();
-      // 2. USA o ID obtido para criar o objeto Cartao.
       final newCard = Cartao(
         id: newCardRef.id, 
         baralhoId: newDeckRef.id,
@@ -67,7 +64,6 @@ class FirestoreService {
   }
 
   Future<DocumentReference> addBaralho(Baralho baralho, String userId) async {
-    // Ajustado para não precisar do ID do baralho, já que o Firestore gera.
     return await _db.collection('users').doc(userId).collection('baralhos').add(baralho.toMap());
   }
 
@@ -146,12 +142,33 @@ class FirestoreService {
     await _videosCollection(_userId).doc(video.id).set(video);
   }
 
+  Future<VideoNexo> addVideoFromForm({
+    required String ownerId,
+    required String title,
+    required String subject,
+    required String description,
+    required String videoUrl,
+  }) async {
+    final newVideo = VideoNexo(
+      id: _uuid.v4(),
+      ownerId: ownerId,
+      title: title,
+      subject: subject,
+      description: description,
+      videoUrl: videoUrl,
+      createdAt: Timestamp.now(),
+    );
+    await addVideo(newVideo);
+    return newVideo;
+  }
+
   Future<void> updateVideo(VideoNexo video) async {
     await _videosCollection(video.ownerId).doc(video.id).update(video.toMap());
   }
 
   Future<void> deleteVideo(String userId, String videoId) async {
     await _videosCollection(userId).doc(videoId).delete();
+    await _db.collection('public_videos').doc(videoId).delete();
   }
 
   CollectionReference<Curso> _cursosCollection(String userId) => 
@@ -171,17 +188,41 @@ class FirestoreService {
   Future<DocumentReference<Curso>> createCurso(Curso curso) async {
     return await _cursosCollection(_userId).add(curso);
   }
-   
+
+  Future<Curso> createCursoFromForm({
+    required String ownerId,
+    required String title,
+    required String description,
+  }) async {
+    final newCursoObject = Curso(
+      id: '', // Temporário
+      ownerId: ownerId,
+      title: title,
+      description: description,
+      createdAt: Timestamp.now(),
+    );
+    final docRef = await createCurso(newCursoObject);
+    return Curso(
+      id: docRef.id,
+      ownerId: ownerId,
+      title: title,
+      description: description,
+      createdAt: newCursoObject.createdAt
+    );
+  }
+    
   Future<void> updateCurso(String userId, Curso curso) async {
     await _cursosCollection(userId).doc(curso.id).update(curso.toMap());
   }
 
   Future<void> deleteCurso(String userId, String cursoId) async {
     await _cursosCollection(userId).doc(cursoId).delete();
+    await _db.collection('public_courses').doc(cursoId).delete();
   }
 
   Future<void> rateCurso(String ownerId, String cursoId, String raterId, int rating) async {
-    await _cursosCollection(ownerId).doc(cursoId).update({
+    // ATENÇÃO: Esta escrita deve ser na coleção pública
+    await _db.collection('public_courses').doc(cursoId).update({
       'ratings.$raterId': rating,
     });
   }
@@ -196,8 +237,8 @@ class FirestoreService {
     return _lessonsCollection(userId, cursoId).orderBy('orderIndex').snapshots().map((snap) => snap.docs.map((doc) => doc.data()).toList());
   }
 
-  Future<void> addLesson(String userId, String cursoId, Lesson lesson) async {
-    await _lessonsCollection(userId, cursoId).add(lesson);
+  Future<DocumentReference<Lesson>> addLesson(String userId, String cursoId, Lesson lesson) async {
+    return await _lessonsCollection(userId, cursoId).add(lesson);
   }
 
   Future<void> updateLesson(String userId, String cursoId, Lesson lesson) async {

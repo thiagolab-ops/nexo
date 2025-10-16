@@ -1,10 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:nexo/models/models.dart';
 import 'package:nexo/screens/tela_nexogo_lesson_form.dart';
-import 'package:nexo/screens/tela_video_player_generica.dart'; // <<< IMPORTADO
+import 'package:nexo/screens/tela_video_player_generica.dart';
 import 'package:nexo/services/firestore_service.dart';
 import 'package:provider/provider.dart';
-// url_launcher não é mais necessário aqui
 
 class TelaNexoGoCursoDetalhe extends StatefulWidget {
   final Curso curso;
@@ -26,7 +27,6 @@ class _TelaNexoGoCursoDetalheState extends State<TelaNexoGoCursoDetalhe> {
   }
 
   void _onReorder(int oldIndex, int newIndex) async {
-    // ... (lógica de reordenar, sem mudanças)
     if (newIndex > oldIndex) {
       newIndex -= 1;
     }
@@ -38,27 +38,38 @@ class _TelaNexoGoCursoDetalheState extends State<TelaNexoGoCursoDetalhe> {
     for (int i = 0; i < _lessons.length; i++) {
       _lessons[i].orderIndex = i;
     }
+    // Atualiza a ordem na coleção privada
     await _firestoreService.updateLessonOrder(widget.curso.ownerId, widget.curso.id, _lessons);
+    
+    // Atualiza a ordem na coleção pública também
+    final batch = FirebaseFirestore.instance.batch();
+    for (var lesson in _lessons) {
+      final publicLessonRef = FirebaseFirestore.instance.collection('public_courses').doc(widget.curso.id).collection('lessons').doc(lesson.id);
+      batch.update(publicLessonRef, {'orderIndex': lesson.orderIndex});
+    }
+    await batch.commit();
   }
 
   void _deleteLesson(Lesson lesson) async {
-    // ... (lógica de deletar, sem mudanças)
      final bool? confirm = await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Excluir Aula'),
-        content: Text('Tem certeza que deseja excluir "${lesson.title}"?'),
+        title: Text('daxugo_deleteLessonTitle'.tr()),
+        content: Text('daxugo_deleteLessonConfirmation'.tr(namedArgs: {'lessonTitle': lesson.title})),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text('cancelButton'.tr())),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+            child: Text('hubDetail_deleteButton'.tr(), style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
     if (confirm == true) {
+      // Deleta da coleção privada
       await _firestoreService.deleteLesson(widget.curso.ownerId, widget.curso.id, lesson.id);
+      // Deleta da coleção pública
+      await FirebaseFirestore.instance.collection('public_courses').doc(widget.curso.id).collection('lessons').doc(lesson.id).delete();
     }
   }
 
@@ -70,9 +81,9 @@ class _TelaNexoGoCursoDetalheState extends State<TelaNexoGoCursoDetalhe> {
         actions: [
           IconButton(
             icon: const Icon(Icons.link),
-            tooltip: 'Ligar este Curso a um Hub',
+            tooltip: 'daxugo_linkCourseToHub'.tr(),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Em breve: Ligar Cursos a Hubs!')));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('daxugo_linkCourseToHub_Soon'.tr())));
             },
           ),
         ],
@@ -84,13 +95,13 @@ class _TelaNexoGoCursoDetalheState extends State<TelaNexoGoCursoDetalhe> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(child: Text('Erro: ${snapshot.error}'));
+            return Center(child: Text('daxugo_saveError'.tr(namedArgs: {'error': snapshot.error.toString()})));
           }
           if (snapshot.hasData) {
             _lessons = snapshot.data!; 
           }
           if (_lessons.isEmpty) {
-            return const Center(child: Text('Nenhuma aula adicionada.\nClique em + para criar a primeira aula.', textAlign: TextAlign.center));
+            return Center(child: Text('daxugo_noLessons'.tr(), textAlign: TextAlign.center));
           }
 
           return ReorderableListView.builder(
@@ -113,6 +124,7 @@ class _TelaNexoGoCursoDetalheState extends State<TelaNexoGoCursoDetalhe> {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.edit, size: 20),
+                        tooltip: 'daxugo_editLesson'.tr(),
                         onPressed: () => Navigator.of(context).push(MaterialPageRoute(
                           builder: (context) => TelaNexoGoLessonForm(
                             cursoId: widget.curso.id,
@@ -123,11 +135,11 @@ class _TelaNexoGoCursoDetalheState extends State<TelaNexoGoCursoDetalhe> {
                       ),
                        IconButton(
                         icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
+                        tooltip: 'daxugo_deleteLessonTitle'.tr(),
                         onPressed: () => _deleteLesson(lesson),
                       ),
                     ],
                   ),
-                  // --- ONTAP ATUALIZADO PARA O PLAYER GENÉRICO ---
                   onTap: () {
                     Navigator.of(context).push(MaterialPageRoute(
                         builder: (context) => TelaVideoPlayerGenerica(videoUrl: lesson.videoUrl, videoTitle: lesson.title),
@@ -150,7 +162,7 @@ class _TelaNexoGoCursoDetalheState extends State<TelaNexoGoCursoDetalhe> {
             ),
           ));
         },
-        tooltip: 'Adicionar Aula',
+        tooltip: 'daxugo_addLessonTooltip'.tr(),
         child: const Icon(Icons.add),
       ),
     );

@@ -25,16 +25,14 @@ dependencies:
   url_launcher: ^6.3.0
   printing: ^5.13.1
   pdf: ^3.11.3
-  webview_flutter: ^4.8.2
   fluttertoast: ^8.2.6
-  webview_flutter_web: ^0.2.3+4
   firebase_storage: ^11.7.7
   timeago: ^3.6.1
   table_calendar: ^3.1.2
   math_expressions: ^2.6.0
   file_picker: ^8.0.6
   csv: ^6.0.0
-  js: ^0.7.1 # <-- BIBLIOTECA DE UTILITÁRIOS JS ADICIONADA
+  js: ^0.7.1
   uuid: ^4.5.1
   vector_math: ^2.1.4
 
